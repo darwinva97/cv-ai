@@ -1,5 +1,6 @@
 import { pgTable, text, timestamp, jsonb, uuid, serial, customType, foreignKey, boolean, primaryKey, unique } from "drizzle-orm/pg-core";
 import { user } from "@/db/schema";
+import { ai } from "./ai";
 
 const ltree = customType<{ data: string }>({
   dataType() {
@@ -37,6 +38,8 @@ export const resumeVersion = pgTable("resume_version", {
   jobOfferText: text("job_offer"), // Descripción de la oferta de trabajo
   jobOfferLink: text("job_offer_link"), // Link a la oferta de trabajo
   jobOfferLinkExtracted: text("job_offer_link_extracted"), // Texto extraído de la oferta de trabajo
+  ai: uuid("ai")
+    .references(() => ai.id, { onDelete: "cascade" }), // IA utilizada para generar el CV (si es que se generó con IA)
 }, (table) => [
   unique().on(table.resumeId, table.customSlug),
   unique().on(table.resumeId, table.title),
@@ -44,10 +47,8 @@ export const resumeVersion = pgTable("resume_version", {
     columns: [table.basedOn],
     foreignColumns: [table.id],
   }).onDelete("set null"),
-  foreignKey({
-    columns: [resume.currentVersionId],
-    foreignColumns: [table.id],
-  }).onDelete("set null"),
+  // Nota: La FK de resume.currentVersionId -> resumeVersion.id 
+  // debe crearse manualmente en SQL debido a la dependencia circular
 ]);
 
 export const resumeVersionPromptImage = pgTable("resume_version_prompt_image", {

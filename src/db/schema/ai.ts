@@ -3,12 +3,13 @@ import { user } from "./auth";
 
 // typeAi: anthropic, openai, cohere, ai21, huggingface
 const PROVIDERS = ["anthropic", "openai", "other"] as const;
-const providerAi = pgEnum("provider_ai", PROVIDERS);
+export const providerAi = pgEnum("provider_ai", PROVIDERS);
 
 export const ai = pgTable("ai", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull()
-    .references(() => user.id),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   model: text("model").notNull(),
   token: text("token").notNull(),
