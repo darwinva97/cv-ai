@@ -1,0 +1,19 @@
+import { pgTable, text, timestamp, boolean, uuid, pgEnum } from "drizzle-orm/pg-core";
+import { user } from "./auth";
+
+// typeAi: anthropic, openai, cohere, ai21, huggingface
+const PROVIDERS = ["anthropic", "openai", "other"] as const;
+const providerAi = pgEnum("provider_ai", PROVIDERS);
+
+export const ai = pgTable("ai", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull()
+    .references(() => user.id),
+  name: text("name").notNull(),
+  model: text("model").notNull(),
+  token: text("token").notNull(),
+  url: text("url"),
+  providerAi: providerAi("provider_ai").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
