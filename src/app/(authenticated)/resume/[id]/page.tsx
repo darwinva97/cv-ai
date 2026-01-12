@@ -114,6 +114,9 @@ export default function ResumeEditorPage() {
     pinnedFields: [],
     aiModifiedFields: [],
   });
+  const [workExperiences, setWorkExperiences] = useState<Work[]>([]);
+  const [educations, setEducations] = useState<Education[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
   const [versionTitle, setVersionTitle] = useState("Versión 1");
   const [aiPrompt, setAiPrompt] = useState("");
   const [jobOffer, setJobOffer] = useState("");
@@ -312,6 +315,85 @@ export default function ResumeEditorPage() {
       return (basics.aiModifiedFields || []).includes(field);
     }
     return false;
+  };
+
+  // Add new items
+  const addWorkExperience = () => {
+    const newWork: Work = {
+      id: `temp-${Date.now()}`,
+      name: "",
+      position: "",
+      startDate: "",
+      endDate: "",
+      summary: "",
+      highlights: [],
+      pinnedFields: [],
+      aiModifiedFields: [],
+    };
+    setWorkExperiences((prev) => [...prev, newWork]);
+  };
+
+  const updateWorkExperience = (index: number, field: keyof Work, value: any) => {
+    setWorkExperiences((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const removeWorkExperience = (index: number) => {
+    setWorkExperiences((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addEducation = () => {
+    const newEducation: Education = {
+      id: `temp-${Date.now()}`,
+      institution: "",
+      area: "",
+      studyType: "",
+      startDate: "",
+      endDate: "",
+      courses: [],
+      pinnedFields: [],
+      aiModifiedFields: [],
+    };
+    setEducations((prev) => [...prev, newEducation]);
+  };
+
+  const updateEducation = (index: number, field: keyof Education, value: any) => {
+    setEducations((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const removeEducation = (index: number) => {
+    setEducations((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addSkill = () => {
+    const newSkill: Skill = {
+      id: `temp-${Date.now()}`,
+      name: "",
+      level: "",
+      keywords: [],
+      pinnedFields: [],
+      aiModifiedFields: [],
+    };
+    setSkills((prev) => [...prev, newSkill]);
+  };
+
+  const updateSkill = (index: number, field: keyof Skill, value: any) => {
+    setSkills((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const removeSkill = (index: number) => {
+    setSkills((prev) => prev.filter((_, i) => i !== index));
   };
 
   const isEditingMode = editMode !== "none";
@@ -612,16 +694,77 @@ export default function ResumeEditorPage() {
                         Tu historial profesional
                       </CardDescription>
                     </div>
-                    <Button variant="outline" size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Añadir experiencia
-                    </Button>
+                    {isEditingMode && (
+                      <Button variant="outline" size="sm" onClick={addWorkExperience}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Añadir experiencia
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    No hay experiencia laboral añadida
-                  </p>
+                <CardContent className="space-y-6">
+                  {workExperiences.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No hay experiencia laboral añadida
+                    </p>
+                  ) : (
+                    workExperiences.map((work, index) => (
+                      <div key={work.id} className="border rounded-lg p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium">
+                            {work.name || work.position || `Experiencia ${index + 1}`}
+                          </h4>
+                          {isEditingMode && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeWorkExperience(index)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <EditableField
+                            label="Empresa"
+                            value={work.name}
+                            onChange={(value) => updateWorkExperience(index, "name", value)}
+                            isEditMode={isEditingMode}
+                          />
+                          <EditableField
+                            label="Cargo"
+                            value={work.position}
+                            onChange={(value) => updateWorkExperience(index, "position", value)}
+                            isEditMode={isEditingMode}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <EditableField
+                            label="Fecha inicio"
+                            value={work.startDate}
+                            onChange={(value) => updateWorkExperience(index, "startDate", value)}
+                            isEditMode={isEditingMode}
+                            placeholder="YYYY-MM"
+                          />
+                          <EditableField
+                            label="Fecha fin"
+                            value={work.endDate || ""}
+                            onChange={(value) => updateWorkExperience(index, "endDate", value)}
+                            isEditMode={isEditingMode}
+                            placeholder="YYYY-MM o vacío si actual"
+                          />
+                        </div>
+                        <EditableField
+                          label="Descripción"
+                          type="textarea"
+                          value={work.summary}
+                          onChange={(value) => updateWorkExperience(index, "summary", value)}
+                          isEditMode={isEditingMode}
+                          rows={3}
+                        />
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -637,16 +780,76 @@ export default function ResumeEditorPage() {
                         Tu formación académica
                       </CardDescription>
                     </div>
-                    <Button variant="outline" size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Añadir educación
-                    </Button>
+                    {isEditingMode && (
+                      <Button variant="outline" size="sm" onClick={addEducation}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Añadir educación
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    No hay educación añadida
-                  </p>
+                <CardContent className="space-y-6">
+                  {educations.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No hay educación añadida
+                    </p>
+                  ) : (
+                    educations.map((edu, index) => (
+                      <div key={edu.id} className="border rounded-lg p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium">
+                            {edu.institution || edu.area || `Educación ${index + 1}`}
+                          </h4>
+                          {isEditingMode && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeEducation(index)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <EditableField
+                            label="Institución"
+                            value={edu.institution}
+                            onChange={(value) => updateEducation(index, "institution", value)}
+                            isEditMode={isEditingMode}
+                          />
+                          <EditableField
+                            label="Área de estudio"
+                            value={edu.area}
+                            onChange={(value) => updateEducation(index, "area", value)}
+                            isEditMode={isEditingMode}
+                          />
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          <EditableField
+                            label="Tipo de estudio"
+                            value={edu.studyType}
+                            onChange={(value) => updateEducation(index, "studyType", value)}
+                            isEditMode={isEditingMode}
+                            placeholder="Ej: Licenciatura"
+                          />
+                          <EditableField
+                            label="Fecha inicio"
+                            value={edu.startDate}
+                            onChange={(value) => updateEducation(index, "startDate", value)}
+                            isEditMode={isEditingMode}
+                            placeholder="YYYY-MM"
+                          />
+                          <EditableField
+                            label="Fecha fin"
+                            value={edu.endDate || ""}
+                            onChange={(value) => updateEducation(index, "endDate", value)}
+                            isEditMode={isEditingMode}
+                            placeholder="YYYY-MM"
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -662,16 +865,55 @@ export default function ResumeEditorPage() {
                         Tus competencias técnicas y profesionales
                       </CardDescription>
                     </div>
-                    <Button variant="outline" size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Añadir habilidad
-                    </Button>
+                    {isEditingMode && (
+                      <Button variant="outline" size="sm" onClick={addSkill}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Añadir habilidad
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    No hay habilidades añadidas
-                  </p>
+                <CardContent className="space-y-6">
+                  {skills.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No hay habilidades añadidas
+                    </p>
+                  ) : (
+                    skills.map((skill, index) => (
+                      <div key={skill.id} className="border rounded-lg p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium">
+                            {skill.name || `Habilidad ${index + 1}`}
+                          </h4>
+                          {isEditingMode && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeSkill(index)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <EditableField
+                            label="Nombre"
+                            value={skill.name}
+                            onChange={(value) => updateSkill(index, "name", value)}
+                            isEditMode={isEditingMode}
+                            placeholder="Ej: JavaScript"
+                          />
+                          <EditableField
+                            label="Nivel"
+                            value={skill.level}
+                            onChange={(value) => updateSkill(index, "level", value)}
+                            isEditMode={isEditingMode}
+                            placeholder="Ej: Avanzado"
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
