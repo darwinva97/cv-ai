@@ -24,10 +24,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { createResume } from "@/actions/resume";
+import { useSession } from "@/lib/auth-client";
 
 export default function NewResumePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const isAIMode = searchParams.get("ai") === "true";
 
   const [isLoading, setIsLoading] = useState(false);
@@ -43,18 +46,16 @@ export default function NewResumePage() {
   const [jobOfferLink, setJobOfferLink] = useState("");
 
   const handleCreateBasicResume = async () => {
-    if (!title.trim()) return;
+    if (!title.trim() || !session?.user?.id) return;
 
     setIsLoading(true);
     try {
-      // TODO: Llamar a la API para crear el CV
-      // const response = await fetch('/api/resumes', { ... });
-      // const data = await response.json();
-      // router.push(`/resume/${data.id}`);
-
-      // Simulación
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      router.push("/resume/new-id");
+      const newResume = await createResume({
+        userId: session.user.id,
+        title: title.trim(),
+        description: description.trim() || undefined,
+      });
+      router.push(`/resume/${newResume.id}`);
     } catch (error) {
       console.error(error);
     } finally {
@@ -63,16 +64,20 @@ export default function NewResumePage() {
   };
 
   const handleGenerateWithAI = async () => {
-    if (!title.trim() || (!jobOfferText.trim() && !jobOfferLink.trim())) return;
+    if (!title.trim() || !session?.user?.id || (!jobOfferText.trim() && !jobOfferLink.trim())) return;
 
     setIsLoading(true);
     try {
-      // TODO: Llamar a la API para generar con IA
-      // const response = await fetch('/api/resumes/generate', { ... });
+      // Create resume first
+      const newResume = await createResume({
+        userId: session.user.id,
+        title: title.trim(),
+        description: description.trim() || undefined,
+      });
 
-      // Simulación
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      router.push("/resume/new-id");
+      // TODO: Call AI generation API with jobOfferText/jobOfferLink and prompt
+      // For now, just navigate to the new resume
+      router.push(`/resume/${newResume.id}`);
     } catch (error) {
       console.error(error);
     } finally {

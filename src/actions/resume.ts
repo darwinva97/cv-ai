@@ -103,25 +103,47 @@ export async function createResumeVersion(data: {
 }) {
   // Generate version ID based on parent
   let versionId = "1";
-  
+
   if (data.basedOn) {
-    // If based on another version, increment the ltree path
-    const [result] = await db.execute(
-      sql`SELECT ${data.basedOn}::ltree || text(
-        (SELECT COALESCE(MAX(subltree2int(subpath(id, -1))), 0) + 1
-         FROM resume_version 
-         WHERE id ~ ${`${data.basedOn}.*{1}`}::lquery)
-      )::ltree as new_id`
+    // Parse the base version to get parent path and last segment
+    const parts = data.basedOn.split(".");
+    const lastSegment = parseInt(parts[parts.length - 1], 10);
+    const parentPath = parts.slice(0, -1).join(".");
+
+    // Try to create sibling version first (e.g., 2.4 -> 2.5)
+    const siblingId = parentPath
+      ? `${parentPath}.${lastSegment + 1}`
+      : String(lastSegment + 1);
+
+    // Check if sibling already exists
+    const siblingExists = await db.execute(
+      sql`SELECT 1 FROM resume_version
+          WHERE resume_id = ${data.resumeId} AND id = ${siblingId}::ltree`
     );
-    versionId = (result as any).new_id;
+
+    if (siblingExists.length === 0) {
+      // Sibling doesn't exist, use it
+      versionId = siblingId;
+    } else {
+      // Sibling exists, create child version (e.g., 2.4 -> 2.4.1)
+      const result = await db.execute(
+        sql`SELECT COALESCE(MAX((subpath(id, -1)::text)::int), 0) + 1 as next_child
+           FROM resume_version
+           WHERE resume_id = ${data.resumeId}
+           AND id <@ ${data.basedOn}::ltree
+           AND nlevel(id) = nlevel(${data.basedOn}::ltree) + 1`
+      );
+      const nextChild = (result[0] as any)?.next_child || 1;
+      versionId = `${data.basedOn}.${nextChild}`;
+    }
   } else {
     // Root version, find next root number
-    const [result] = await db.execute(
-      sql`SELECT COALESCE(MAX(subltree2int(id)), 0) + 1 as next_id 
-          FROM resume_version 
+    const result = await db.execute(
+      sql`SELECT COALESCE(MAX((id::text)::int), 0) + 1 as next_id
+          FROM resume_version
           WHERE resume_id = ${data.resumeId} AND nlevel(id) = 1`
     );
-    versionId = String((result as any).next_id || 1);
+    versionId = String((result[0] as any)?.next_id || 1);
   }
 
   const [newVersion] = await db

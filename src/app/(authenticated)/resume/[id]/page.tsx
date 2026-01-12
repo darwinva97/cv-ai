@@ -94,7 +94,6 @@ export default function ResumeEditorPage() {
   const [currentVersion, setCurrentVersion] = useState<any>(null);
   const [basicsId, setBasicsId] = useState<string | null>(null);
 
-  const hasVersions = versions.length > 0;
   const [editMode, setEditMode] = useState<EditMode>("none");
   const [showPreview, setShowPreview] = useState(true);
   const [currentVersionId, setCurrentVersionId] = useState("");
@@ -147,9 +146,6 @@ export default function ResumeEditorPage() {
           const versionId = resumeData.currentVersionId || versionsData[0].id;
           setCurrentVersionId(versionId);
           await loadVersionData(versionId);
-        } else {
-          // No versions, enter creation mode
-          setEditMode("create");
         }
       } catch (error) {
         console.error("Error loading resume:", error);
@@ -201,10 +197,10 @@ export default function ResumeEditorPage() {
 
   // Load version data when version changes
   useEffect(() => {
-    if (currentVersionId && hasVersions) {
+    if (currentVersionId) {
       loadVersionData(currentVersionId);
     }
-  }, [currentVersionId, hasVersions]);
+  }, [currentVersionId]);
 
   const handleStyleSelect = (styleId: string, config: ResumeStyleConfig) => {
     setCurrentStyleId(styleId);
@@ -237,6 +233,10 @@ export default function ResumeEditorPage() {
   };
 
   const handleStartCreateVersion = () => {
+    // Reset form for new version
+    setVersionTitle("");
+    setAiPrompt("");
+    setJobOffer("");
     setEditMode("create");
   };
 
@@ -258,10 +258,10 @@ export default function ResumeEditorPage() {
       // Create new version
       const newVersion = await createResumeVersion({
         resumeId,
-        title: versionTitle,
-        basedOn: hasVersions ? currentVersionId : undefined,
-        prompt: aiPrompt,
-        jobOfferText: jobOffer,
+        title: versionTitle.trim() || undefined, // Let server generate default title if empty
+        basedOn: currentVersionId || undefined,
+        prompt: aiPrompt.trim() || undefined,
+        jobOfferText: jobOffer.trim() || undefined,
         isResultPublic,
         isCommunityPublic,
       });
@@ -357,37 +357,35 @@ export default function ResumeEditorPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Version selector - Solo mostrar si hay versiones */}
-            {hasVersions && (
-              <Select
-                value={currentVersionId}
-                onValueChange={setCurrentVersionId}
-                disabled={isEditingMode}
-              >
-                <SelectTrigger className="w-[220px]">
-                  <GitBranch className="mr-2 h-4 w-4" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {versions.map((version) => (
-                    <SelectItem key={version.id} value={version.id}>
-                      {version.title || `Versión ${version.id}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            {/* Version selector */}
+            <Select
+              value={currentVersionId}
+              onValueChange={setCurrentVersionId}
+              disabled={isEditingMode || versions.length === 0}
+            >
+              <SelectTrigger className="w-[220px]">
+                <GitBranch className="mr-2 h-4 w-4" />
+                <SelectValue placeholder="Sin versiones" />
+              </SelectTrigger>
+              <SelectContent>
+                {versions.map((version) => (
+                  <SelectItem key={version.id} value={version.id}>
+                    {version.title || `Versión ${version.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             {/* Action buttons based on mode */}
-            {editMode === "none" && hasVersions && (
+            {editMode === "none" && (
               <>
-                <Button onClick={handleStartEdit} variant="outline">
+                <Button onClick={handleStartEdit} variant="outline" disabled={versions.length === 0}>
                   <Edit className="mr-2 h-4 w-4" />
                   Editar versión
                 </Button>
                 <Button onClick={handleStartCreateVersion}>
                   <Plus className="mr-2 h-4 w-4" />
-                  Crear nueva versión
+                  Nueva versión
                 </Button>
               </>
             )}
@@ -396,7 +394,7 @@ export default function ResumeEditorPage() {
               <>
                 <Button onClick={handleCancelEdit} variant="outline">
                   <X className="mr-2 h-4 w-4" />
-                  Cancelar edición
+                  Cancelar
                 </Button>
                 <Button onClick={handleSave} disabled={isSaving}>
                   {isSaving ? (
@@ -404,61 +402,57 @@ export default function ResumeEditorPage() {
                   ) : (
                     <Check className="mr-2 h-4 w-4" />
                   )}
-                  Actualizar
+                  Guardar
                 </Button>
               </>
             )}
 
             {editMode === "create" && (
               <>
-                {hasVersions && (
-                  <Button onClick={handleCancelEdit} variant="outline">
-                    <X className="mr-2 h-4 w-4" />
-                    Cancelar creación
-                  </Button>
-                )}
+                <Button onClick={handleCancelEdit} variant="outline">
+                  <X className="mr-2 h-4 w-4" />
+                  Cancelar
+                </Button>
                 <Button onClick={handleCreateVersion} disabled={isSaving}>
                   {isSaving ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Plus className="mr-2 h-4 w-4" />
                   )}
-                  {hasVersions ? "Crear versión" : "Crear primera versión"}
+                  Crear versión
                 </Button>
               </>
             )}
 
-            {/* More actions dropdown - Solo si hay versiones */}
-            {hasVersions && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <Link href={`/resume-result/${resume.slug}`} target="_blank">
-                      <Eye className="mr-2 h-4 w-4" />
-                      Ver página
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Download className="mr-2 h-4 w-4" />
-                    Exportar PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Share2 className="mr-2 h-4 w-4" />
-                    Compartir
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive">
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Eliminar CV
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            {/* More actions dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link href={`/resume-result/${resume.slug}`} target="_blank">
+                    <Eye className="mr-2 h-4 w-4" />
+                    Ver página
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Download className="mr-2 h-4 w-4" />
+                  Exportar PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Share2 className="mr-2 h-4 w-4" />
+                  Compartir
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Eliminar CV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <Button
               variant="outline"

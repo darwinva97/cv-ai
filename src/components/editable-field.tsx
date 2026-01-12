@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -36,6 +36,11 @@ export function EditableField({
   rows = 3,
 }: EditableFieldProps) {
   const [localValue, setLocalValue] = useState(value);
+
+  // Sync localValue when value prop changes (e.g., when loading a different version)
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
 
   const handleChange = (newValue: string) => {
     setLocalValue(newValue);
@@ -87,11 +92,13 @@ export function EditableField({
         value={localValue}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={placeholder}
-        disabled={disabled}
+        disabled={disabled || !isEditMode}
+        readOnly={!isEditMode}
         rows={type === "textarea" ? rows : undefined}
         className={cn(
           isAiModified && "border-yellow-500/50",
-          isPinned && isEditMode && "border-primary"
+          isPinned && isEditMode && "border-primary",
+          !isEditMode && "bg-muted/50 cursor-default"
         )}
       />
     </div>
