@@ -108,6 +108,9 @@ export const resumeBasics = pgTable("resume_basics", {
     countryCode?: string;
     region?: string;
   }>(),
+  // Campos de control de IA
+  pinnedFields: jsonb("pinned_fields").$type<string[]>().default([]), // Campos que no pueden ser editados por IA
+  aiModifiedFields: jsonb("ai_modified_fields").$type<string[]>().default([]), // Campos modificados por IA
 });
 
 export const resumeVersionProfile = pgTable("resume_version_profile", {
@@ -127,6 +130,8 @@ export const resumeProfile = pgTable("resume_profile", {
   network: text("network"), // e.g. "Twitter", "LinkedIn"
   username: text("username"),
   url: text("url"),
+  pinnedFields: jsonb("pinned_fields").$type<string[]>().default([]),
+  aiModifiedFields: jsonb("ai_modified_fields").$type<string[]>().default([]),
 });
 
 export const resumeVersionWork = pgTable("resume_version_work", {
@@ -150,6 +155,8 @@ export const resumeWork = pgTable("resume_work", {
   endDate: text("end_date"),
   summary: text("summary"),
   highlights: jsonb("highlights").$type<string[]>(),
+  pinnedFields: jsonb("pinned_fields").$type<string[]>().default([]),
+  aiModifiedFields: jsonb("ai_modified_fields").$type<string[]>().default([]),
 });
 
 export const resumeVersionVolunteer = pgTable("resume_version_volunteer", {
@@ -173,6 +180,8 @@ export const resumeVolunteer = pgTable("resume_volunteer", {
   endDate: text("end_date"),
   summary: text("summary"),
   highlights: jsonb("highlights").$type<string[]>(),
+  pinnedFields: jsonb("pinned_fields").$type<string[]>().default([]),
+  aiModifiedFields: jsonb("ai_modified_fields").$type<string[]>().default([]),
 });
 
 export const resumeVersionEducation = pgTable("resume_version_education", {
@@ -197,6 +206,8 @@ export const resumeEducation = pgTable("resume_education", {
   endDate: text("end_date"),
   score: text("score"),
   courses: jsonb("courses").$type<string[]>(),
+  pinnedFields: jsonb("pinned_fields").$type<string[]>().default([]),
+  aiModifiedFields: jsonb("ai_modified_fields").$type<string[]>().default([]),
 });
 
 export const resumeVersionAward = pgTable("resume_version_award", {
@@ -277,6 +288,8 @@ export const resumeSkill = pgTable("resume_skill", {
   name: text("name"),
   level: text("level"), // e.g. "Master", "Intermediate"
   keywords: jsonb("keywords").$type<string[]>(),
+  pinnedFields: jsonb("pinned_fields").$type<string[]>().default([]),
+  aiModifiedFields: jsonb("ai_modified_fields").$type<string[]>().default([]),
 });
 
 export const resumeVersionLanguage = pgTable("resume_version_language", {
@@ -357,4 +370,6 @@ export const resumeProject = pgTable("resume_project", {
   roles: jsonb("roles").$type<string[]>(),
   entity: text("entity"), // Company/Organization
   type: text("type"), // e.g. "application", "website"
+  pinnedFields: jsonb("pinned_fields").$type<string[]>().default([]),
+  aiModifiedFields: jsonb("ai_modified_fields").$type<string[]>().default([]),
 });

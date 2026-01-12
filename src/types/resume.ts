@@ -1,5 +1,11 @@
 // Types based on JSON Resume schema and database schema
 
+// Base interface for AI control fields
+export interface AIControlFields {
+  pinnedFields?: string[]; // Fields that cannot be edited by AI
+  aiModifiedFields?: string[]; // Fields modified by AI
+}
+
 export interface Location {
   address?: string;
   postalCode?: string;
@@ -8,7 +14,7 @@ export interface Location {
   region?: string;
 }
 
-export interface Basics {
+export interface Basics extends AIControlFields {
   id?: string;
   name: string;
   label: string;
@@ -20,14 +26,14 @@ export interface Basics {
   location: Location;
 }
 
-export interface Profile {
+export interface Profile extends AIControlFields {
   id?: string;
   network: string;
   username: string;
   url: string;
 }
 
-export interface Work {
+export interface Work extends AIControlFields {
   id?: string;
   name: string;
   position: string;
@@ -38,7 +44,7 @@ export interface Work {
   highlights: string[];
 }
 
-export interface Volunteer {
+export interface Volunteer extends AIControlFields {
   id?: string;
   organization: string;
   position: string;
@@ -49,7 +55,7 @@ export interface Volunteer {
   highlights: string[];
 }
 
-export interface Education {
+export interface Education extends AIControlFields {
   id?: string;
   institution: string;
   url?: string;
@@ -86,7 +92,7 @@ export interface Publication {
   summary?: string;
 }
 
-export interface Skill {
+export interface Skill extends AIControlFields {
   id?: string;
   name: string;
   level: string;
@@ -111,7 +117,7 @@ export interface Reference {
   reference: string;
 }
 
-export interface Project {
+export interface Project extends AIControlFields {
   id?: string;
   name: string;
   startDate?: string;

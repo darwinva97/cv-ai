@@ -154,7 +154,7 @@ export default function AuthenticatedLayout({
 
       {/* Main content */}
       <main className="flex-1 pl-64">
-        <div className="container mx-auto p-6">{children}</div>
+        <div className="container max-w-full mx-auto p-6">{children}</div>
       </main>
     </div>
   );

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   Download,
@@ -15,8 +16,14 @@ import {
   Share2,
   Sparkles,
   Trash2,
+  Edit,
+  X,
+  Check,
+  ChevronDown,
+  FileText,
 } from "lucide-react";
 import { StylePicker } from "@/components/style-picker";
+import { EditableField } from "@/components/editable-field";
 import type { ResumeStyleConfig } from "@/db/schema/style";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,183 +62,149 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import type { Basics, Profile, Work, Education, Skill, Language, Project } from "@/types/resume";
+import {
+  getResume,
+  getResumeVersions,
+  getResumeVersion,
+  getVersionData,
+  createResumeVersion,
+  updateResumeVersion,
+  updateVersionBasics,
+  createVersionBasics,
+} from "@/actions/resume";
 
-// Tipos basados en el schema
-interface Location {
-  address?: string;
-  postalCode?: string;
-  city?: string;
-  countryCode?: string;
-  region?: string;
-}
-
-interface Basics {
-  id?: string;
-  name: string;
-  label: string;
-  image?: string;
-  email: string;
-  phone: string;
-  url?: string;
-  summary: string;
-  location: Location;
-}
-
-interface Profile {
-  id?: string;
-  network: string;
-  username: string;
-  url: string;
-}
-
-interface Work {
-  id?: string;
-  name: string;
-  position: string;
-  url?: string;
-  startDate: string;
-  endDate?: string;
-  summary: string;
-  highlights: string[];
-}
-
-interface Education {
-  id?: string;
-  institution: string;
-  url?: string;
-  area: string;
-  studyType: string;
-  startDate: string;
-  endDate?: string;
-  score?: string;
-  courses: string[];
-}
-
-interface Skill {
-  id?: string;
-  name: string;
-  level: string;
-  keywords: string[];
-}
-
-interface Language {
-  id?: string;
-  language: string;
-  fluency: string;
-}
-
-interface Project {
-  id?: string;
-  name: string;
-  startDate?: string;
-  endDate?: string;
-  description: string;
-  highlights: string[];
-  url?: string;
-  keywords: string[];
-}
-
-// Datos de ejemplo
-const mockResume = {
-  id: "1",
-  title: "CV Desarrollador Full Stack",
-  slug: "dev-fullstack",
-  description: "Para ofertas de desarrollo web",
-  currentVersion: {
-    id: "1.3",
-    title: "v1.3",
-    isResultPublic: true,
-    isCommunityPublic: false,
-    prompt: "Enfatizar experiencia en React y Node.js",
-    jobOfferText: "Buscamos desarrollador full stack...",
-  },
-  versions: [
-    { id: "1.3", title: "v1.3 - Actualizado para Google" },
-    { id: "1.2", title: "v1.2 - Con proyectos" },
-    { id: "1.1", title: "v1.1 - Versión inicial" },
-  ],
-};
-
-const mockBasics: Basics = {
-  name: "Juan Pérez",
-  label: "Desarrollador Full Stack",
-  email: "juan@example.com",
-  phone: "+34 612 345 678",
-  url: "https://juanperez.dev",
-  summary:
-    "Desarrollador con 5+ años de experiencia en React, Node.js y TypeScript. Apasionado por crear productos de alta calidad.",
-  location: {
-    city: "Madrid",
-    countryCode: "ES",
-    region: "Comunidad de Madrid",
-  },
-};
-
-const mockProfiles: Profile[] = [
-  { id: "1", network: "LinkedIn", username: "juanperez", url: "https://linkedin.com/in/juanperez" },
-  { id: "2", network: "GitHub", username: "juanperez", url: "https://github.com/juanperez" },
-];
-
-const mockWork: Work[] = [
-  {
-    id: "1",
-    name: "Tech Corp",
-    position: "Senior Full Stack Developer",
-    startDate: "2022-01",
-    summary: "Desarrollo de aplicaciones web con React y Node.js",
-    highlights: ["Lideré migración a TypeScript", "Implementé CI/CD"],
-  },
-  {
-    id: "2",
-    name: "StartupXYZ",
-    position: "Full Stack Developer",
-    startDate: "2019-06",
-    endDate: "2021-12",
-    summary: "Desarrollo de MVP y features principales",
-    highlights: ["Desarrollo desde 0 del producto", "Crecimiento de 0 a 10k usuarios"],
-  },
-];
-
-const mockEducation: Education[] = [
-  {
-    id: "1",
-    institution: "Universidad Politécnica",
-    area: "Ingeniería Informática",
-    studyType: "Grado",
-    startDate: "2015-09",
-    endDate: "2019-06",
-    courses: [],
-  },
-];
-
-const mockSkills: Skill[] = [
-  { id: "1", name: "React", level: "Experto", keywords: ["Hooks", "Next.js", "Redux"] },
-  { id: "2", name: "Node.js", level: "Avanzado", keywords: ["Express", "NestJS", "Fastify"] },
-  { id: "3", name: "TypeScript", level: "Experto", keywords: [] },
-];
-
-const mockLanguages: Language[] = [
-  { id: "1", language: "Español", fluency: "Nativo" },
-  { id: "2", language: "Inglés", fluency: "C1" },
-];
+type EditMode = "none" | "edit" | "create";
 
 export default function ResumeEditorPage() {
+  const params = useParams();
+  const resumeId = params.id as string;
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("basics");
 
+  // Resume data from DB
+  const [resume, setResume] = useState<any>(null);
+  const [versions, setVersions] = useState<any[]>([]);
+  const [currentVersion, setCurrentVersion] = useState<any>(null);
+  const [basicsId, setBasicsId] = useState<string | null>(null);
+
+  const hasVersions = versions.length > 0;
+  const [editMode, setEditMode] = useState<EditMode>("none");
+  const [showPreview, setShowPreview] = useState(true);
+  const [currentVersionId, setCurrentVersionId] = useState("");
+
   // Form states
-  const [basics, setBasics] = useState<Basics>(mockBasics);
-  const [profiles, setProfiles] = useState<Profile[]>(mockProfiles);
-  const [work, setWork] = useState<Work[]>(mockWork);
-  const [education, setEducation] = useState<Education[]>(mockEducation);
-  const [skills, setSkills] = useState<Skill[]>(mockSkills);
-  const [languages, setLanguages] = useState<Language[]>(mockLanguages);
+  const [basics, setBasics] = useState<Basics>({
+    name: "",
+    label: "",
+    email: "",
+    phone: "",
+    url: "",
+    summary: "",
+    location: {
+      city: "",
+      countryCode: "",
+      region: "",
+    },
+    pinnedFields: [],
+    aiModifiedFields: [],
+  });
+  const [versionTitle, setVersionTitle] = useState("Versión 1");
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [jobOffer, setJobOffer] = useState("");
 
   // Settings
-  const [isResultPublic, setIsResultPublic] = useState(mockResume.currentVersion.isResultPublic);
-  const [isCommunityPublic, setIsCommunityPublic] = useState(mockResume.currentVersion.isCommunityPublic);
+  const [isResultPublic, setIsResultPublic] = useState(false);
+  const [isCommunityPublic, setIsCommunityPublic] = useState(false);
   const [currentStyleId, setCurrentStyleId] = useState<string | undefined>(undefined);
   const [currentStyleConfig, setCurrentStyleConfig] = useState<ResumeStyleConfig | undefined>(undefined);
+
+  // Load resume data on mount
+  useEffect(() => {
+    async function loadResumeData() {
+      try {
+        setIsLoading(true);
+        
+        // Get resume
+        const resumeData = await getResume(resumeId);
+        if (!resumeData) {
+          throw new Error("Resume not found");
+        }
+        setResume(resumeData);
+
+        // Get all versions
+        const versionsData = await getResumeVersions(resumeId);
+        setVersions(versionsData);
+
+        // If there are versions, load the current one
+        if (versionsData.length > 0) {
+          const versionId = resumeData.currentVersionId || versionsData[0].id;
+          setCurrentVersionId(versionId);
+          await loadVersionData(versionId);
+        } else {
+          // No versions, enter creation mode
+          setEditMode("create");
+        }
+      } catch (error) {
+        console.error("Error loading resume:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadResumeData();
+  }, [resumeId]);
+
+  async function loadVersionData(versionId: string) {
+    try {
+      const version = await getResumeVersion(versionId);
+      setCurrentVersion(version);
+
+      // Load version metadata
+      setVersionTitle(version?.title || "Versión 1");
+      setAiPrompt(version?.prompt || "");
+      setJobOffer(version?.jobOfferText || "");
+      setIsResultPublic(version?.isResultPublic ?? false);
+      setIsCommunityPublic(version?.isCommunityPublic ?? false);
+
+      // Load version data (basics, work, education, etc.)
+      const versionData = await getVersionData(versionId);
+      
+      if (versionData.basics) {
+        setBasicsId(versionData.basics.id);
+        setBasics({
+          name: versionData.basics.name || "",
+          label: versionData.basics.label || "",
+          email: versionData.basics.email || "",
+          phone: versionData.basics.phone || "",
+          url: versionData.basics.url || "",
+          summary: versionData.basics.summary || "",
+          location: versionData.basics.location || {
+            city: "",
+            countryCode: "",
+            region: "",
+          },
+          pinnedFields: versionData.basics.pinnedFields || [],
+          aiModifiedFields: versionData.basics.aiModifiedFields || [],
+        });
+      }
+    } catch (error) {
+      console.error("Error loading version data:", error);
+    }
+  }
+
+  // Load version data when version changes
+  useEffect(() => {
+    if (currentVersionId && hasVersions) {
+      loadVersionData(currentVersionId);
+    }
+  }, [currentVersionId, hasVersions]);
 
   const handleStyleSelect = (styleId: string, config: ResumeStyleConfig) => {
     setCurrentStyleId(styleId);
@@ -241,65 +214,222 @@ export default function ResumeEditorPage() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // TODO: Guardar en la API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Update version metadata
+      await updateResumeVersion(currentVersionId, {
+        title: versionTitle,
+        prompt: aiPrompt,
+        jobOfferText: jobOffer,
+        isResultPublic,
+        isCommunityPublic,
+      });
+
+      // Update basics
+      if (basicsId) {
+        await updateVersionBasics(basicsId, basics);
+      }
+
+      setEditMode("none");
+    } catch (error) {
+      console.error("Error saving:", error);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const updateBasics = (field: keyof Basics, value: unknown) => {
-    setBasics((prev) => ({ ...prev, [field]: value }));
+  const handleStartCreateVersion = () => {
+    setEditMode("create");
   };
 
-  const updateLocation = (field: keyof Location, value: string) => {
-    setBasics((prev) => ({
-      ...prev,
-      location: { ...prev.location, [field]: value },
-    }));
+  const handleStartEdit = () => {
+    setEditMode("edit");
   };
+
+  const handleCancelEdit = () => {
+    setEditMode("none");
+    // Reload data to reset form
+    if (currentVersionId) {
+      loadVersionData(currentVersionId);
+    }
+  };
+
+  const handleCreateVersion = async () => {
+    setIsSaving(true);
+    try {
+      // Create new version
+      const newVersion = await createResumeVersion({
+        resumeId,
+        title: versionTitle,
+        basedOn: hasVersions ? currentVersionId : undefined,
+        prompt: aiPrompt,
+        jobOfferText: jobOffer,
+        isResultPublic,
+        isCommunityPublic,
+      });
+
+      // Create basics for this version
+      const newBasics = await createVersionBasics(newVersion.id, basics);
+      setBasicsId(newBasics.id);
+
+      // Reload versions list
+      const versionsData = await getResumeVersions(resumeId);
+      setVersions(versionsData);
+      
+      // Set current version to the new one
+      setCurrentVersionId(newVersion.id);
+      setEditMode("none");
+    } catch (error) {
+      console.error("Error creating version:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const toggleFieldPin = (section: string, field: string) => {
+    if (section === "basics") {
+      setBasics((prev) => {
+        const pinnedFields = prev.pinnedFields || [];
+        const isPinned = pinnedFields.includes(field);
+        return {
+          ...prev,
+          pinnedFields: isPinned
+            ? pinnedFields.filter((f) => f !== field)
+            : [...pinnedFields, field],
+        };
+      });
+    }
+    // Similar logic for other sections
+  };
+
+  const isFieldPinned = (section: string, field: string): boolean => {
+    if (section === "basics") {
+      return (basics.pinnedFields || []).includes(field);
+    }
+    return false;
+  };
+
+  const isFieldAiModified = (section: string, field: string): boolean => {
+    if (section === "basics") {
+      return (basics.aiModifiedFields || []).includes(field);
+    }
+    return false;
+  };
+
+  const isEditingMode = editMode !== "none";
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto max-w-9xl py-6 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Cargando CV...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!resume) {
+    return (
+      <div className="container mx-auto max-w-9xl py-6 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-muted-foreground">CV no encontrado</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+    <div className="container mx-auto max-w-9xl py-6 space-y-6">
       {/* Sticky Header */}
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 space-y-4 bg-zinc-50 dark:bg-zinc-950">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" asChild>
-                <Link href="/resumes">
-                  <ArrowLeft className="h-5 w-5" />
-                </Link>
-              </Button>
-              <div>
-                <h1 className="text-2xl font-bold">{mockResume.title}</h1>
-                <p className="text-sm text-muted-foreground">
-                  {mockResume.description}
-                </p>
-              </div>
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 space-y-4 bg-background border-b">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" asChild>
+              <Link href="/resumes">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold">{resume.title}</h1>
+              <p className="text-sm text-muted-foreground">
+                {resume.description || "Nuevo currículum"}
+              </p>
             </div>
+          </div>
 
-            <div className="flex items-center gap-2">
-              {/* Version selector */}
-              <Select defaultValue={mockResume.currentVersion.id}>
-                <SelectTrigger className="w-[200px]">
+          <div className="flex items-center gap-2">
+            {/* Version selector - Solo mostrar si hay versiones */}
+            {hasVersions && (
+              <Select
+                value={currentVersionId}
+                onValueChange={setCurrentVersionId}
+                disabled={isEditingMode}
+              >
+                <SelectTrigger className="w-[220px]">
                   <GitBranch className="mr-2 h-4 w-4" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockResume.versions.map((version) => (
+                  {versions.map((version) => (
                     <SelectItem key={version.id} value={version.id}>
-                      {version.title}
+                      {version.title || `Versión ${version.id}`}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            )}
 
-              <Button variant="outline" size="icon" asChild>
-                <Link href={`/resume-result/${mockResume.slug}`} target="_blank">
-                  <Eye className="h-4 w-4" />
-                </Link>
-              </Button>
+            {/* Action buttons based on mode */}
+            {editMode === "none" && hasVersions && (
+              <>
+                <Button onClick={handleStartEdit} variant="outline">
+                  <Edit className="mr-2 h-4 w-4" />
+                  Editar versión
+                </Button>
+                <Button onClick={handleStartCreateVersion}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear nueva versión
+                </Button>
+              </>
+            )}
 
+            {editMode === "edit" && (
+              <>
+                <Button onClick={handleCancelEdit} variant="outline">
+                  <X className="mr-2 h-4 w-4" />
+                  Cancelar edición
+                </Button>
+                <Button onClick={handleSave} disabled={isSaving}>
+                  {isSaving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  Actualizar
+                </Button>
+              </>
+            )}
+
+            {editMode === "create" && (
+              <>
+                {hasVersions && (
+                  <Button onClick={handleCancelEdit} variant="outline">
+                    <X className="mr-2 h-4 w-4" />
+                    Cancelar creación
+                  </Button>
+                )}
+                <Button onClick={handleCreateVersion} disabled={isSaving}>
+                  {isSaving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="mr-2 h-4 w-4" />
+                  )}
+                  {hasVersions ? "Crear versión" : "Crear primera versión"}
+                </Button>
+              </>
+            )}
+
+            {/* More actions dropdown - Solo si hay versiones */}
+            {hasVersions && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="icon">
@@ -307,13 +437,11 @@ export default function ResumeEditorPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem>
-                    <GitBranch className="mr-2 h-4 w-4" />
-                    Nueva versión
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Regenerar con IA
+                  <DropdownMenuItem asChild>
+                    <Link href={`/resume-result/${resume.slug}`} target="_blank">
+                      <Eye className="mr-2 h-4 w-4" />
+                      Ver página
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem>
                     <Download className="mr-2 h-4 w-4" />
@@ -330,912 +458,459 @@ export default function ResumeEditorPage() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              <Button onClick={handleSave} disabled={isSaving}>
-                {isSaving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                Guardar
-              </Button>
-            </div>
-          </div>
-
-          {/* Version info badges */}
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary">
-              Versión {mockResume.currentVersion.title}
-            </Badge>
-            {isResultPublic && (
-              <Badge variant="default">
-                <Eye className="mr-1 h-3 w-3" />
-                Público
-              </Badge>
             )}
-            {mockResume.currentVersion.prompt && (
-              <Badge variant="outline">
-                <Sparkles className="mr-1 h-3 w-3" />
-                Generado con IA
-              </Badge>
-            )}
-          </div>
 
-          {/* Tabs */}
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="basics">Básico</TabsTrigger>
-            <TabsTrigger value="work">Experiencia</TabsTrigger>
-            <TabsTrigger value="education">Educación</TabsTrigger>
-            <TabsTrigger value="skills">Habilidades</TabsTrigger>
-            <TabsTrigger value="projects">Proyectos</TabsTrigger>
-            <TabsTrigger value="other">Otros</TabsTrigger>
-            <TabsTrigger value="settings">Ajustes</TabsTrigger>
-          </TabsList>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPreview(!showPreview)}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              {showPreview ? "Ocultar" : "Mostrar"} vista previa
+            </Button>
+          </div>
         </div>
 
-          {/* Basics Tab */}
-          <TabsContent value="basics" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Información personal</CardTitle>
-                <CardDescription>
-                  Tu información de contacto principal
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nombre completo</Label>
-                    <Input
-                      id="name"
-                      value={basics.name}
-                      onChange={(e) => updateBasics("name", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="label">Título profesional</Label>
-                    <Input
-                      id="label"
-                      value={basics.label}
-                      onChange={(e) => updateBasics("label", e.target.value)}
-                      placeholder="Ej: Desarrollador Full Stack"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
+        {/* Preview toggle */}
+        <div className="flex items-center justify-end">
+
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className={`grid ${showPreview ? "grid-cols-2" : "grid-cols-1"} gap-6`}>
+        {/* Editor Panel */}
+        <div>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="basics">Básicos</TabsTrigger>
+              <TabsTrigger value="work">Experiencia</TabsTrigger>
+              <TabsTrigger value="education">Educación</TabsTrigger>
+              <TabsTrigger value="skills">Habilidades</TabsTrigger>
+              <TabsTrigger value="settings">Ajustes</TabsTrigger>
+              <TabsTrigger value="ai">IA</TabsTrigger>
+            </TabsList>
+
+            {/* Basics Tab */}
+            <TabsContent value="basics" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Información básica</CardTitle>
+                  <CardDescription>
+                    Tu información de contacto y perfil profesional
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <EditableField
+                    label="Nombre completo"
+                    value={basics.name}
+                    onChange={(value) => setBasics({ ...basics, name: value })}
+                    isPinned={isFieldPinned("basics", "name")}
+                    isAiModified={isFieldAiModified("basics", "name")}
+                    onPinToggle={() => toggleFieldPin("basics", "name")}
+                    isEditMode={isEditingMode}
+                  />
+
+                  <EditableField
+                    label="Título profesional"
+                    value={basics.label}
+                    onChange={(value) => setBasics({ ...basics, label: value })}
+                    isPinned={isFieldPinned("basics", "label")}
+                    isAiModified={isFieldAiModified("basics", "label")}
+                    onPinToggle={() => toggleFieldPin("basics", "label")}
+                    isEditMode={isEditingMode}
+                    placeholder="ej: Desarrollador Full Stack"
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <EditableField
+                      label="Email"
                       type="email"
                       value={basics.email}
-                      onChange={(e) => updateBasics("email", e.target.value)}
+                      onChange={(value) => setBasics({ ...basics, email: value })}
+                      isPinned={isFieldPinned("basics", "email")}
+                      isAiModified={isFieldAiModified("basics", "email")}
+                      onPinToggle={() => toggleFieldPin("basics", "email")}
+                      isEditMode={isEditingMode}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Teléfono</Label>
-                    <Input
-                      id="phone"
+
+                    <EditableField
+                      label="Teléfono"
+                      type="tel"
                       value={basics.phone}
-                      onChange={(e) => updateBasics("phone", e.target.value)}
+                      onChange={(value) => setBasics({ ...basics, phone: value })}
+                      isPinned={isFieldPinned("basics", "phone")}
+                      isAiModified={isFieldAiModified("basics", "phone")}
+                      onPinToggle={() => toggleFieldPin("basics", "phone")}
+                      isEditMode={isEditingMode}
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="url">Sitio web</Label>
-                  <Input
-                    id="url"
+
+                  <EditableField
+                    label="URL / Portafolio"
+                    type="url"
                     value={basics.url || ""}
-                    onChange={(e) => updateBasics("url", e.target.value)}
-                    placeholder="https://tuportfolio.com"
+                    onChange={(value) => setBasics({ ...basics, url: value })}
+                    isPinned={isFieldPinned("basics", "url")}
+                    isAiModified={isFieldAiModified("basics", "url")}
+                    onPinToggle={() => toggleFieldPin("basics", "url")}
+                    isEditMode={isEditingMode}
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="summary">Resumen profesional</Label>
-                  <Textarea
-                    id="summary"
+
+                  <EditableField
+                    label="Resumen profesional"
+                    type="textarea"
                     value={basics.summary}
-                    onChange={(e) => updateBasics("summary", e.target.value)}
-                    rows={4}
-                    placeholder="Un breve resumen sobre ti y tu experiencia..."
+                    onChange={(value) => setBasics({ ...basics, summary: value })}
+                    isPinned={isFieldPinned("basics", "summary")}
+                    isAiModified={isFieldAiModified("basics", "summary")}
+                    onPinToggle={() => toggleFieldPin("basics", "summary")}
+                    isEditMode={isEditingMode}
+                    rows={5}
                   />
-                </div>
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Ubicación</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">Ciudad</Label>
-                    <Input
-                      id="city"
-                      value={basics.location.city || ""}
-                      onChange={(e) => updateLocation("city", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="region">Región/Provincia</Label>
-                    <Input
-                      id="region"
-                      value={basics.location.region || ""}
-                      onChange={(e) => updateLocation("region", e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="country">País</Label>
-                    <Input
-                      id="country"
-                      value={basics.location.countryCode || ""}
-                      onChange={(e) =>
-                        updateLocation("countryCode", e.target.value)
-                      }
-                      placeholder="ES"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="postalCode">Código postal</Label>
-                    <Input
-                      id="postalCode"
-                      value={basics.location.postalCode || ""}
-                      onChange={(e) =>
-                        updateLocation("postalCode", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold">Ubicación</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <EditableField
+                        label="Ciudad"
+                        value={basics.location.city || ""}
+                        onChange={(value) =>
+                          setBasics({
+                            ...basics,
+                            location: { ...basics.location, city: value },
+                          })
+                        }
+                        isPinned={isFieldPinned("basics", "location.city")}
+                        isAiModified={isFieldAiModified("basics", "location.city")}
+                        onPinToggle={() => toggleFieldPin("basics", "location.city")}
+                        isEditMode={isEditingMode}
+                      />
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Perfiles sociales</CardTitle>
+                      <EditableField
+                        label="País"
+                        value={basics.location.countryCode || ""}
+                        onChange={(value) =>
+                          setBasics({
+                            ...basics,
+                            location: { ...basics.location, countryCode: value },
+                          })
+                        }
+                        isPinned={isFieldPinned("basics", "location.country")}
+                        isAiModified={isFieldAiModified("basics", "location.country")}
+                        onPinToggle={() => toggleFieldPin("basics", "location.country")}
+                        isEditMode={isEditingMode}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Work Tab */}
+            <TabsContent value="work" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Experiencia laboral</CardTitle>
+                      <CardDescription>
+                        Tu historial profesional
+                      </CardDescription>
+                    </div>
+                    <Button variant="outline" size="sm">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Añadir experiencia
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    No hay experiencia laboral añadida
+                  </p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Education Tab */}
+            <TabsContent value="education" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Educación</CardTitle>
+                      <CardDescription>
+                        Tu formación académica
+                      </CardDescription>
+                    </div>
+                    <Button variant="outline" size="sm">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Añadir educación
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    No hay educación añadida
+                  </p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Skills Tab */}
+            <TabsContent value="skills" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Habilidades</CardTitle>
+                      <CardDescription>
+                        Tus competencias técnicas y profesionales
+                      </CardDescription>
+                    </div>
+                    <Button variant="outline" size="sm">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Añadir habilidad
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    No hay habilidades añadidas
+                  </p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Settings Tab */}
+            <TabsContent value="settings" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Configuración de la versión</CardTitle>
                   <CardDescription>
-                    Tus redes sociales y perfiles profesionales
+                    Personaliza esta versión de tu CV
                   </CardDescription>
-                </div>
-                <Button variant="outline" size="sm">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Añadir
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {profiles.map((profile, index) => (
-                    <div
-                      key={profile.id}
-                      className="flex items-center gap-4 rounded-lg border p-4"
-                    >
-                      <div className="flex-1 grid grid-cols-3 gap-4">
-                        <Input
-                          placeholder="Red social"
-                          value={profile.network}
-                          onChange={(e) => {
-                            const newProfiles = [...profiles];
-                            newProfiles[index].network = e.target.value;
-                            setProfiles(newProfiles);
-                          }}
-                        />
-                        <Input
-                          placeholder="Usuario"
-                          value={profile.username}
-                          onChange={(e) => {
-                            const newProfiles = [...profiles];
-                            newProfiles[index].username = e.target.value;
-                            setProfiles(newProfiles);
-                          }}
-                        />
-                        <Input
-                          placeholder="URL"
-                          value={profile.url}
-                          onChange={(e) => {
-                            const newProfiles = [...profiles];
-                            newProfiles[index].url = e.target.value;
-                            setProfiles(newProfiles);
-                          }}
-                        />
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          setProfiles(profiles.filter((_, i) => i !== index))
-                        }
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Work Experience Tab */}
-          <TabsContent value="work" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Experiencia laboral</h2>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Añadir experiencia
-              </Button>
-            </div>
-
-            {work.map((job, index) => (
-              <Card key={job.id}>
-                <CardHeader className="flex flex-row items-start justify-between">
-                  <div>
-                    <CardTitle>{job.position}</CardTitle>
-                    <CardDescription>
-                      {job.name} • {job.startDate} -{" "}
-                      {job.endDate || "Presente"}
-                    </CardDescription>
-                  </div>
-                  <Button variant="ghost" size="icon">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Empresa</Label>
-                      <Input
-                        value={job.name}
-                        onChange={(e) => {
-                          const newWork = [...work];
-                          newWork[index].name = e.target.value;
-                          setWork(newWork);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Puesto</Label>
-                      <Input
-                        value={job.position}
-                        onChange={(e) => {
-                          const newWork = [...work];
-                          newWork[index].position = e.target.value;
-                          setWork(newWork);
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Fecha inicio</Label>
-                      <Input
-                        type="month"
-                        value={job.startDate}
-                        onChange={(e) => {
-                          const newWork = [...work];
-                          newWork[index].startDate = e.target.value;
-                          setWork(newWork);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Fecha fin</Label>
-                      <Input
-                        type="month"
-                        value={job.endDate || ""}
-                        onChange={(e) => {
-                          const newWork = [...work];
-                          newWork[index].endDate = e.target.value;
-                          setWork(newWork);
-                        }}
-                        placeholder="Presente"
-                      />
-                    </div>
-                  </div>
                   <div className="space-y-2">
-                    <Label>Descripción</Label>
-                    <Textarea
-                      value={job.summary}
-                      onChange={(e) => {
-                        const newWork = [...work];
-                        newWork[index].summary = e.target.value;
-                        setWork(newWork);
-                      }}
-                      rows={3}
+                    <Label>Nombre de la versión</Label>
+                    <Input
+                      value={versionTitle}
+                      onChange={(e) => setVersionTitle(e.target.value)}
+                      placeholder="ej: v1 - Para empresa X"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Logros destacados</Label>
-                    <div className="space-y-2">
-                      {job.highlights.map((highlight, hIndex) => (
-                        <div key={hIndex} className="flex gap-2">
-                          <Input
-                            value={highlight}
-                            onChange={(e) => {
-                              const newWork = [...work];
-                              newWork[index].highlights[hIndex] = e.target.value;
-                              setWork(newWork);
-                            }}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              const newWork = [...work];
-                              newWork[index].highlights = job.highlights.filter(
-                                (_, i) => i !== hIndex
-                              );
-                              setWork(newWork);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const newWork = [...work];
-                          newWork[index].highlights.push("");
-                          setWork(newWork);
-                        }}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Añadir logro
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
-
-          {/* Education Tab */}
-          <TabsContent value="education" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Educación</h2>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Añadir educación
-              </Button>
-            </div>
-
-            {education.map((edu, index) => (
-              <Card key={edu.id}>
-                <CardHeader className="flex flex-row items-start justify-between">
-                  <div>
-                    <CardTitle>{edu.area}</CardTitle>
-                    <CardDescription>
-                      {edu.institution} • {edu.studyType}
-                    </CardDescription>
-                  </div>
-                  <Button variant="ghost" size="icon">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Institución</Label>
-                      <Input
-                        value={edu.institution}
-                        onChange={(e) => {
-                          const newEdu = [...education];
-                          newEdu[index].institution = e.target.value;
-                          setEducation(newEdu);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Título/Área de estudio</Label>
-                      <Input
-                        value={edu.area}
-                        onChange={(e) => {
-                          const newEdu = [...education];
-                          newEdu[index].area = e.target.value;
-                          setEducation(newEdu);
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>Tipo</Label>
-                      <Input
-                        value={edu.studyType}
-                        onChange={(e) => {
-                          const newEdu = [...education];
-                          newEdu[index].studyType = e.target.value;
-                          setEducation(newEdu);
-                        }}
-                        placeholder="Grado, Máster, etc."
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Fecha inicio</Label>
-                      <Input
-                        type="month"
-                        value={edu.startDate}
-                        onChange={(e) => {
-                          const newEdu = [...education];
-                          newEdu[index].startDate = e.target.value;
-                          setEducation(newEdu);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Fecha fin</Label>
-                      <Input
-                        type="month"
-                        value={edu.endDate || ""}
-                        onChange={(e) => {
-                          const newEdu = [...education];
-                          newEdu[index].endDate = e.target.value;
-                          setEducation(newEdu);
-                        }}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
-
-          {/* Skills Tab */}
-          <TabsContent value="skills" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Habilidades</h2>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Añadir habilidad
-              </Button>
-            </div>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  {skills.map((skill, index) => (
-                    <div
-                      key={skill.id}
-                      className="flex items-center gap-4 rounded-lg border p-4"
-                    >
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <Input
-                            value={skill.name}
-                            onChange={(e) => {
-                              const newSkills = [...skills];
-                              newSkills[index].name = e.target.value;
-                              setSkills(newSkills);
-                            }}
-                            className="font-medium"
-                          />
-                        </div>
-                        <Select
-                          value={skill.level}
-                          onValueChange={(value) => {
-                            const newSkills = [...skills];
-                            newSkills[index].level = value;
-                            setSkills(newSkills);
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Principiante">
-                              Principiante
-                            </SelectItem>
-                            <SelectItem value="Intermedio">Intermedio</SelectItem>
-                            <SelectItem value="Avanzado">Avanzado</SelectItem>
-                            <SelectItem value="Experto">Experto</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <div className="flex flex-wrap gap-1">
-                          {skill.keywords.map((keyword, kIndex) => (
-                            <Badge key={kIndex} variant="secondary">
-                              {keyword}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          setSkills(skills.filter((_, i) => i !== index))
-                        }
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Idiomas</h2>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Añadir idioma
-              </Button>
-            </div>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="grid gap-4 md:grid-cols-3">
-                  {languages.map((lang, index) => (
-                    <div
-                      key={lang.id}
-                      className="flex items-center gap-4 rounded-lg border p-4"
-                    >
-                      <div className="flex-1 space-y-2">
-                        <Input
-                          value={lang.language}
-                          onChange={(e) => {
-                            const newLangs = [...languages];
-                            newLangs[index].language = e.target.value;
-                            setLanguages(newLangs);
-                          }}
-                          placeholder="Idioma"
-                        />
-                        <Input
-                          value={lang.fluency}
-                          onChange={(e) => {
-                            const newLangs = [...languages];
-                            newLangs[index].fluency = e.target.value;
-                            setLanguages(newLangs);
-                          }}
-                          placeholder="Nivel"
-                        />
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          setLanguages(languages.filter((_, i) => i !== index))
-                        }
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Projects Tab */}
-          <TabsContent value="projects" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Proyectos</h2>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Añadir proyecto
-              </Button>
-            </div>
-
-            <Card className="py-16">
-              <CardContent className="flex flex-col items-center justify-center text-center">
-                <Plus className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">
-                  No tienes proyectos todavía
-                </h3>
-                <p className="text-muted-foreground mb-4">
-                  Añade proyectos para mostrar tu trabajo
-                </p>
-                <Button variant="outline">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Añadir proyecto
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Other Tab */}
-          <TabsContent value="other" className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Certificados</CardTitle>
-                    <Button variant="outline" size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Añadir
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    No hay certificados añadidos
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Premios</CardTitle>
-                    <Button variant="outline" size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Añadir
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    No hay premios añadidos
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Publicaciones</CardTitle>
-                    <Button variant="outline" size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Añadir
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    No hay publicaciones añadidas
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Voluntariado</CardTitle>
-                    <Button variant="outline" size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Añadir
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    No hay voluntariado añadido
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Referencias</CardTitle>
-                    <Button variant="outline" size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Añadir
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    No hay referencias añadidas
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Intereses</CardTitle>
-                    <Button variant="outline" size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Añadir
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    No hay intereses añadidos
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Settings Tab */}
-          <TabsContent value="settings" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Visibilidad</CardTitle>
-                <CardDescription>
-                  Controla quién puede ver tu CV
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>CV público</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Cualquiera con el link puede ver tu CV
+                    <p className="text-xs text-muted-foreground">
+                      Por defecto se usa el número de versión
                     </p>
                   </div>
-                  <Switch
-                    checked={isResultPublic}
-                    onCheckedChange={setIsResultPublic}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Mostrar en comunidad</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Otros usuarios pueden ver tu CV como ejemplo
-                    </p>
-                  </div>
-                  <Switch
-                    checked={isCommunityPublic}
-                    onCheckedChange={setIsCommunityPublic}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Palette className="h-5 w-5" />
-                  Estilo visual
-                </CardTitle>
-                <CardDescription>
-                  Personaliza la apariencia de tu CV
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <StylePicker
-                  currentStyleId={currentStyleId}
-                  onSelectStyle={handleStyleSelect}
-                />
-                {currentStyleConfig && (
-                  <div className="flex items-center gap-4 p-3 rounded-lg bg-muted">
-                    <div className="flex gap-1">
-                      <div
-                        className="w-6 h-6 rounded-full border"
-                        style={{ backgroundColor: currentStyleConfig.colors.primary }}
-                      />
-                      <div
-                        className="w-6 h-6 rounded-full border"
-                        style={{ backgroundColor: currentStyleConfig.colors.background }}
-                      />
-                    </div>
-                    <div className="text-sm">
-                      <p className="font-medium">Estilo aplicado</p>
-                      <p className="text-muted-foreground">
-                        {currentStyleConfig.layout.type.replace("-", " ")} • {currentStyleConfig.typography.baseFontSize}px
+              <Card>
+                <CardHeader>
+                  <CardTitle>Visibilidad</CardTitle>
+                  <CardDescription>
+                    Controla quién puede ver tu CV
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>CV público</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Cualquiera con el link puede ver tu CV
                       </p>
                     </div>
+                    <Switch
+                      checked={isResultPublic}
+                      onCheckedChange={setIsResultPublic}
+                    />
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Mostrar en comunidad</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Otros usuarios pueden ver tu CV como ejemplo
+                      </p>
+                    </div>
+                    <Switch
+                      checked={isCommunityPublic}
+                      onCheckedChange={setIsCommunityPublic}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Slug personalizado</CardTitle>
-                <CardDescription>
-                  Personaliza la URL de tu CV público
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">
-                    /resume-result/
-                  </span>
-                  <Input
-                    value={mockResume.slug}
-                    placeholder="mi-cv"
-                    className="max-w-[200px]"
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Palette className="h-5 w-5" />
+                    Estilo visual
+                  </CardTitle>
+                  <CardDescription>
+                    Personaliza la apariencia de tu CV
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <StylePicker
+                    currentStyleId={currentStyleId}
+                    onSelectStyle={handleStyleSelect}
                   />
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-            {mockResume.currentVersion.prompt && (
+            {/* AI Tab */}
+            <TabsContent value="ai" className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Sparkles className="h-5 w-5" />
-                    Generación con IA
+                    Configuración de IA
                   </CardTitle>
                   <CardDescription>
-                    Esta versión fue generada con inteligencia artificial
+                    Personaliza cómo la IA edita tu CV
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Prompt utilizado</Label>
+                    <Label>Prompt para la IA</Label>
                     <Textarea
-                      value={mockResume.currentVersion.prompt}
-                      readOnly
-                      rows={2}
-                      className="bg-muted"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      placeholder="Ej: Enfatiza experiencia en React y habilidades de liderazgo"
+                      rows={4}
                     />
                   </div>
+
                   <div className="space-y-2">
-                    <Label>Oferta de trabajo</Label>
+                    <Label>Oferta de trabajo (opcional)</Label>
                     <Textarea
-                      value={mockResume.currentVersion.jobOfferText}
-                      readOnly
-                      rows={3}
-                      className="bg-muted"
+                      value={jobOffer}
+                      onChange={(e) => setJobOffer(e.target.value)}
+                      placeholder="Pega aquí la descripción de la oferta de trabajo"
+                      rows={6}
                     />
                   </div>
-                  <Button variant="secondary">
+
+                  <Button className="w-full">
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Regenerar con nuevo prompt
+                    Generar con IA
                   </Button>
                 </CardContent>
               </Card>
-            )}
 
-            <Card className="border-destructive">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Campos fijados</CardTitle>
+                  <CardDescription>
+                    Controla qué campos puede editar la IA
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Collapsible>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="w-full justify-between">
+                        <span>Información básica</span>
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 pt-2 pl-4">
+                      {["name", "label", "email", "phone", "summary"].map((field) => (
+                        <div key={field} className="flex items-center justify-between py-2">
+                          <Label className="text-sm">
+                            {field === "name"
+                              ? "Nombre"
+                              : field === "label"
+                                ? "Título"
+                                : field === "email"
+                                  ? "Email"
+                                  : field === "phone"
+                                    ? "Teléfono"
+                                    : "Resumen"}
+                          </Label>
+                          <Switch
+                            checked={isFieldPinned("basics", field)}
+                            onCheckedChange={() => toggleFieldPin("basics", field)}
+                          />
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+
+                  <Collapsible>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="w-full justify-between">
+                        <span>Experiencia laboral</span>
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 pt-2 pl-4">
+                      <p className="text-sm text-muted-foreground">
+                        No hay experiencia laboral
+                      </p>
+                    </CollapsibleContent>
+                  </Collapsible>
+
+                  <Collapsible>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="w-full justify-between">
+                        <span>Educación</span>
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 pt-2 pl-4">
+                      <p className="text-sm text-muted-foreground">
+                        No hay educación
+                      </p>
+                    </CollapsibleContent>
+                  </Collapsible>
+
+                  <Collapsible>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="w-full justify-between">
+                        <span>Habilidades</span>
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 pt-2 pl-4">
+                      <p className="text-sm text-muted-foreground">
+                        No hay habilidades
+                      </p>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Preview Panel */}
+        {showPreview && (
+          <div className="sticky top-20 h-[calc(100vh-120px)]">
+            <Card className="h-full">
               <CardHeader>
-                <CardTitle className="text-destructive">Zona peligrosa</CardTitle>
+                <CardTitle className="text-sm">Vista previa</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Eliminar esta versión</p>
-                    <p className="text-sm text-muted-foreground">
-                      Se eliminará solo esta versión del CV
-                    </p>
+              <CardContent className="h-[calc(100%-60px)] overflow-auto">
+                <div className="bg-white p-8 shadow-lg rounded-lg">
+                  <h2 className="text-2xl font-bold">{basics.name}</h2>
+                  <p className="text-lg text-gray-600">{basics.label}</p>
+                  <div className="mt-4 space-y-1 text-sm">
+                    <p>{basics.email} • {basics.phone}</p>
+                    {basics.url && <p>{basics.url}</p>}
+                    <p>{basics.location.city}, {basics.location.countryCode}</p>
                   </div>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline">Eliminar versión</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>¿Eliminar versión?</DialogTitle>
-                        <DialogDescription>
-                          Esta acción no se puede deshacer. ¿Estás seguro de que
-                          quieres eliminar esta versión?
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DialogFooter>
-                        <Button variant="outline">Cancelar</Button>
-                        <Button variant="destructive">Eliminar</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Eliminar CV completo</p>
-                    <p className="text-sm text-muted-foreground">
-                      Se eliminarán todas las versiones de este CV
-                    </p>
+                  <div className="mt-6">
+                    <h3 className="text-lg font-semibold mb-2">Resumen</h3>
+                    <p className="text-sm text-gray-700">{basics.summary}</p>
                   </div>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="destructive">Eliminar CV</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>¿Eliminar CV?</DialogTitle>
-                        <DialogDescription>
-                          Esta acción no se puede deshacer. Se eliminarán todas
-                          las versiones de este CV.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DialogFooter>
-                        <Button variant="outline">Cancelar</Button>
-                        <Button variant="destructive">Eliminar todo</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-    </Tabs>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
