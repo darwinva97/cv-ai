@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Get the pathname
   const { pathname } = request.nextUrl;
 

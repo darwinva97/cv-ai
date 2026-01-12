@@ -6,11 +6,14 @@ import {
   FileText,
   Home,
   LogOut,
+  Moon,
   Palette,
   Settings,
   Sparkles,
+  Sun,
   User,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -22,6 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
 import { signOut, useSession } from "@/lib/auth-client";
 
 const navigation = [
@@ -38,9 +42,14 @@ export default function AuthenticatedLayout({
 }) {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const { theme, setTheme } = useTheme();
 
   const handleSignOut = async () => {
     await signOut();
+  };
+
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark");
   };
 
   return (
@@ -114,6 +123,23 @@ export default function AuthenticatedLayout({
                     <Settings className="mr-2 h-4 w-4" />
                     Configuración
                   </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => e.preventDefault()}
+                  className="flex items-center justify-between"
+                >
+                  <div className="flex items-center">
+                    {theme === "dark" ? (
+                      <Moon className="mr-2 h-4 w-4" />
+                    ) : (
+                      <Sun className="mr-2 h-4 w-4" />
+                    )}
+                    Modo oscuro
+                  </div>
+                  <Switch
+                    checked={theme === "dark"}
+                    onCheckedChange={toggleTheme}
+                  />
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
