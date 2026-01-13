@@ -431,7 +431,9 @@ export default function ResumeEditorPage() {
               </Link>
             </Button>
             <div>
-              <h1 className="text-2xl font-bold">{resume.title}</h1>
+              <h1 className="text-2xl font-bold">
+                {resume.title}{versionTitle ? ` - ${versionTitle}` : ""}
+              </h1>
               <p className="text-sm text-muted-foreground">
                 {resume.description || "Nuevo currículum"}
               </p>
@@ -450,11 +452,22 @@ export default function ResumeEditorPage() {
                 <SelectValue placeholder="Sin versiones" />
               </SelectTrigger>
               <SelectContent>
-                {versions.map((version) => (
-                  <SelectItem key={version.id} value={version.id}>
-                    {version.title || `Versión ${version.id}`}
-                  </SelectItem>
-                ))}
+                {[...versions]
+                  .sort((a, b) => {
+                    const partsA = a.id.split(".").map(Number);
+                    const partsB = b.id.split(".").map(Number);
+                    for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+                      const numA = partsA[i] ?? 0;
+                      const numB = partsB[i] ?? 0;
+                      if (numB !== numA) return numB - numA;
+                    }
+                    return 0;
+                  })
+                  .map((version) => (
+                    <SelectItem key={version.id} value={version.id}>
+                      Versión {version.id}{version.title ? ` (${version.title})` : ""}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
 
