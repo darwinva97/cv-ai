@@ -2,16 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   FileText,
   Home,
   LogOut,
+  Menu,
   Moon,
   Palette,
   Settings,
   Sparkles,
   Sun,
   User,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -43,6 +48,8 @@ export default function AuthenticatedLayout({
   const pathname = usePathname();
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -52,15 +59,60 @@ export default function AuthenticatedLayout({
     setTheme(theme === "dark" ? "light" : "dark");
   };
 
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed);
+  };
+
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r bg-white dark:bg-zinc-900 dark:border-zinc-800">
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 bg-white dark:bg-zinc-900 border-r dark:border-zinc-800 transition-all duration-300",
+          isSidebarCollapsed ? "w-16" : "w-64",
+        )}
+      >
         <div className="flex h-full flex-col">
-          {/* Logo */}
-          <div className="flex h-16 items-center gap-2 border-b px-6 dark:border-zinc-800">
-            <Sparkles className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">CV AI</span>
+          {/* Logo & Toggle */}
+          <div
+            className={cn(
+              "flex items-center border-b dark:border-zinc-800 h-16",
+              isSidebarCollapsed
+                ? "justify-center px-2"
+                : "justify-between px-4",
+            )}
+          >
+            <div
+              className={cn(
+                "flex items-center",
+                isSidebarCollapsed ? "gap-0" : "gap-2",
+              )}
+            >
+              <Sparkles className="h-6 w-6 text-primary shrink-0" />
+              {!isSidebarCollapsed && (
+                <span className="text-xl font-bold">CV AI</span>
+              )}
+            </div>
+            <button
+              onClick={toggleSidebar}
+              className={cn(
+                "hidden lg:flex items-center justify-center h-8 w-8 rounded-md",
+                "text-zinc-500 dark:text-zinc-400",
+                "hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-700 dark:hover:text-zinc-200",
+                "transition-colors",
+                isSidebarCollapsed &&
+                  "absolute -right-3 top-4 bg-white dark:bg-zinc-900 border dark:border-zinc-700 shadow-sm",
+              )}
+              title={
+                isSidebarCollapsed ? "Expandir sidebar" : "Contraer sidebar"
+              }
+            >
+              {isSidebarCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+            </button>
           </div>
 
           {/* Navigation */}
@@ -75,11 +127,13 @@ export default function AuthenticatedLayout({
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                     isActive
                       ? "bg-primary text-primary-foreground"
-                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800",
+                    isSidebarCollapsed && "justify-center",
                   )}
+                  title={isSidebarCollapsed ? item.name : undefined}
                 >
-                  <item.icon className="h-5 w-5" />
-                  {item.name}
+                  <item.icon className="h-5 w-5 shrink-0" />
+                  {!isSidebarCollapsed && <span>{item.name}</span>}
                 </Link>
               );
             })}
@@ -91,22 +145,29 @@ export default function AuthenticatedLayout({
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full justify-start gap-3 px-3"
+                  className={cn(
+                    "w-full gap-3 px-3",
+                    isSidebarCollapsed
+                      ? "justify-center px-3"
+                      : "justify-start",
+                  )}
                 >
-                  <Avatar className="h-8 w-8">
+                  <Avatar className="h-8 w-8 shrink-0">
                     <AvatarImage src={session?.user?.image || undefined} />
                     <AvatarFallback>
                       {session?.user?.name?.charAt(0) || "U"}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex flex-col items-start text-sm">
-                    <span className="font-medium">
-                      {session?.user?.name || "Usuario"}
-                    </span>
-                    <span className="text-xs text-zinc-500">
-                      {session?.user?.email}
-                    </span>
-                  </div>
+                  {!isSidebarCollapsed && (
+                    <div className="flex flex-col items-start text-sm">
+                      <span className="font-medium truncate max-w-[140px]">
+                        {session?.user?.name || "Usuario"}
+                      </span>
+                      <span className="text-xs text-zinc-500 truncate max-w-[140px]">
+                        {session?.user?.email}
+                      </span>
+                    </div>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
@@ -152,9 +213,34 @@ export default function AuthenticatedLayout({
         </div>
       </aside>
 
+      {/* Mobile Menu Button */}
+      <button
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white dark:bg-zinc-800 border dark:border-zinc-700 rounded-lg shadow-lg"
+      >
+        {isMobileMenuOpen ? (
+          <X className="h-5 w-5" />
+        ) : (
+          <Menu className="h-5 w-5" />
+        )}
+      </button>
+
+      {/* Mobile Sidebar Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Main content */}
-      <main className="flex-1 pl-64">
-        <div className="container max-w-full mx-auto p-6">{children}</div>
+      <main
+        className={cn(
+          "flex-1 transition-all duration-300",
+          isSidebarCollapsed ? "lg:pl-16" : "lg:pl-64",
+        )}
+      >
+        <div className="container max-w-full mx-auto ">{children}</div>
       </main>
     </div>
   );

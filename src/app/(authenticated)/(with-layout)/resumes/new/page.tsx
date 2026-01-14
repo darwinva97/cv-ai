@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -27,7 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createResume } from "@/actions/resume";
 import { useSession } from "@/lib/auth-client";
 
-export default function NewResumePage() {
+function NewResumeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
@@ -326,5 +326,13 @@ export default function NewResumePage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function NewResumePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+      <NewResumeContent />
+    </Suspense>
   );
 }
