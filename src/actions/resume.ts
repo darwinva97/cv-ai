@@ -116,24 +116,26 @@ export async function createResumeVersion(data: {
       : String(lastSegment + 1);
 
     // Check if sibling already exists
-    const siblingExists = await db.execute(
+    const siblingResult = await db.execute(
       sql`SELECT 1 FROM resume_version
           WHERE resume_id = ${data.resumeId} AND id = ${siblingId}::ltree`
     );
+    const siblingRows = Array.isArray(siblingResult) ? siblingResult : (siblingResult as any).rows || [];
 
-    if (siblingExists.length === 0) {
+    if (siblingRows.length === 0) {
       // Sibling doesn't exist, use it
       versionId = siblingId;
     } else {
       // Sibling exists, create child version (e.g., 2.4 -> 2.4.1)
-      const result = await db.execute(
+      const childResult = await db.execute(
         sql`SELECT COALESCE(MAX((subpath(id, -1)::text)::int), 0) + 1 as next_child
            FROM resume_version
            WHERE resume_id = ${data.resumeId}
            AND id <@ ${data.basedOn}::ltree
            AND nlevel(id) = nlevel(${data.basedOn}::ltree) + 1`
       );
-      const nextChild = (result[0] as any)?.next_child || 1;
+      const childRows = Array.isArray(childResult) ? childResult : (childResult as any).rows || [];
+      const nextChild = childRows[0]?.next_child ?? 1;
       versionId = `${data.basedOn}.${nextChild}`;
     }
   } else {
@@ -143,7 +145,10 @@ export async function createResumeVersion(data: {
           FROM resume_version
           WHERE resume_id = ${data.resumeId} AND nlevel(id) = 1`
     );
-    versionId = String((result[0] as any)?.next_id || 1);
+    // Handle both array of rows and rows property formats
+    const rows = Array.isArray(result) ? result : (result as any).rows || [];
+    const nextId = rows[0]?.next_id;
+    versionId = String(nextId ?? 1);
   }
 
   const [newVersion] = await db
@@ -248,55 +253,58 @@ export async function getVersionData(versionId: string) {
     resumeVersionProject,
   } = await import("@/db/schema/resume");
 
-  // Get basics
-  const basics = await db
-    .select()
-    .from(resumeVersionBasic)
-    .innerJoin(resumeBasics, eq(resumeVersionBasic.resumeBasicId, resumeBasics.id))
-    .where(eq(resumeVersionBasic.resumeVersionId, versionId))
-    .limit(1);
+  // Fetch all version data in parallel for optimal performance
+  const [basics, profiles, work, education, skills, languages, projects] = await Promise.all([
+    // Get basics
+    db
+      .select()
+      .from(resumeVersionBasic)
+      .innerJoin(resumeBasics, eq(resumeVersionBasic.resumeBasicId, resumeBasics.id))
+      .where(eq(resumeVersionBasic.resumeVersionId, versionId))
+      .limit(1),
 
-  // Get profiles
-  const profiles = await db
-    .select()
-    .from(resumeVersionProfile)
-    .innerJoin(resumeProfile, eq(resumeVersionProfile.resumeProfileId, resumeProfile.id))
-    .where(eq(resumeVersionProfile.resumeVersionId, versionId));
+    // Get profiles
+    db
+      .select()
+      .from(resumeVersionProfile)
+      .innerJoin(resumeProfile, eq(resumeVersionProfile.resumeProfileId, resumeProfile.id))
+      .where(eq(resumeVersionProfile.resumeVersionId, versionId)),
 
-  // Get work
-  const work = await db
-    .select()
-    .from(resumeVersionWork)
-    .innerJoin(resumeWork, eq(resumeVersionWork.resumeWorkId, resumeWork.id))
-    .where(eq(resumeVersionWork.resumeVersionId, versionId));
+    // Get work
+    db
+      .select()
+      .from(resumeVersionWork)
+      .innerJoin(resumeWork, eq(resumeVersionWork.resumeWorkId, resumeWork.id))
+      .where(eq(resumeVersionWork.resumeVersionId, versionId)),
 
-  // Get education
-  const education = await db
-    .select()
-    .from(resumeVersionEducation)
-    .innerJoin(resumeEducation, eq(resumeVersionEducation.resumeEducationId, resumeEducation.id))
-    .where(eq(resumeVersionEducation.resumeVersionId, versionId));
+    // Get education
+    db
+      .select()
+      .from(resumeVersionEducation)
+      .innerJoin(resumeEducation, eq(resumeVersionEducation.resumeEducationId, resumeEducation.id))
+      .where(eq(resumeVersionEducation.resumeVersionId, versionId)),
 
-  // Get skills
-  const skills = await db
-    .select()
-    .from(resumeVersionSkill)
-    .innerJoin(resumeSkill, eq(resumeVersionSkill.resumeSkillId, resumeSkill.id))
-    .where(eq(resumeVersionSkill.resumeVersionId, versionId));
+    // Get skills
+    db
+      .select()
+      .from(resumeVersionSkill)
+      .innerJoin(resumeSkill, eq(resumeVersionSkill.resumeSkillId, resumeSkill.id))
+      .where(eq(resumeVersionSkill.resumeVersionId, versionId)),
 
-  // Get languages
-  const languages = await db
-    .select()
-    .from(resumeVersionLanguage)
-    .innerJoin(resumeLanguage, eq(resumeVersionLanguage.resumeLanguageId, resumeLanguage.id))
-    .where(eq(resumeVersionLanguage.resumeVersionId, versionId));
+    // Get languages
+    db
+      .select()
+      .from(resumeVersionLanguage)
+      .innerJoin(resumeLanguage, eq(resumeVersionLanguage.resumeLanguageId, resumeLanguage.id))
+      .where(eq(resumeVersionLanguage.resumeVersionId, versionId)),
 
-  // Get projects
-  const projects = await db
-    .select()
-    .from(resumeVersionProject)
-    .innerJoin(resumeProject, eq(resumeVersionProject.resumeProjectId, resumeProject.id))
-    .where(eq(resumeVersionProject.resumeVersionId, versionId));
+    // Get projects
+    db
+      .select()
+      .from(resumeVersionProject)
+      .innerJoin(resumeProject, eq(resumeVersionProject.resumeProjectId, resumeProject.id))
+      .where(eq(resumeVersionProject.resumeVersionId, versionId)),
+  ]);
 
   return {
     basics: basics[0]?.resume_basics || null,

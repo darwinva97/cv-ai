@@ -240,7 +240,7 @@ export default function AuthenticatedLayout({
           isSidebarCollapsed ? "lg:pl-16" : "lg:pl-64",
         )}
       >
-        <div className="container max-w-full mx-auto ">{children}</div>
+        <div className="container max-w-full mx-auto p-6 lg:p-8">{children}</div>
       </main>
     </div>
   );

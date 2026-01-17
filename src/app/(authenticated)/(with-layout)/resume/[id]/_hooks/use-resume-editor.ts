@@ -67,14 +67,17 @@ export function useResumeEditor(resumeId: string) {
   // Load version data
   const loadVersionData = useCallback(async (versionId: string) => {
     try {
-      const version = await getResumeVersion(versionId);
+      // Fetch version metadata and data in parallel for optimal performance
+      const [version, versionData] = await Promise.all([
+        getResumeVersion(versionId),
+        getVersionData(versionId),
+      ]);
+
       setVersionTitle(version?.title || "Versión 1");
       setAiPrompt(version?.prompt || "");
       setJobOffer(version?.jobOfferText || "");
       setIsResultPublic(version?.isResultPublic ?? false);
       setIsCommunityPublic(version?.isCommunityPublic ?? false);
-
-      const versionData = await getVersionData(versionId);
       if (versionData.basics) {
         setBasicsId(versionData.basics.id);
         setBasics({
@@ -99,11 +102,14 @@ export function useResumeEditor(resumeId: string) {
     async function loadResumeData() {
       try {
         setIsLoading(true);
-        const resumeData = await getResume(resumeId);
+        // Fetch resume and versions in parallel for optimal performance
+        const [resumeData, versionsData] = await Promise.all([
+          getResume(resumeId),
+          getResumeVersions(resumeId),
+        ]);
+
         if (!resumeData) throw new Error("Resume not found");
         setResume(resumeData);
-
-        const versionsData = await getResumeVersions(resumeId);
         setVersions(versionsData);
 
         if (versionsData.length > 0) {
