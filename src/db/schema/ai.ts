@@ -1,8 +1,8 @@
 import { pgTable, text, timestamp, boolean, uuid, pgEnum } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 
-// typeAi: anthropic, openai, cohere, ai21, huggingface
-const PROVIDERS = ["anthropic", "openai", "other"] as const;
+// typeAi: anthropic, openai, google (gemini), other (OpenAI-compatible)
+const PROVIDERS = ["anthropic", "openai", "google", "other"] as const;
 export const providerAi = pgEnum("provider_ai", PROVIDERS);
 
 export const ai = pgTable("ai", {

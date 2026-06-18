@@ -139,6 +139,10 @@ export default function ResumeEditorPage() {
                   onAiPromptChange={editor.setAiPrompt}
                   onJobOfferChange={editor.setJobOffer}
                   onScreenshotAnalysis={editor.handleScreenshotAnalysis}
+                  onGenerate={editor.handleGenerate}
+                  isGenerating={editor.isGenerating}
+                  creditNotice={editor.creditNotice}
+                  onDismissCreditNotice={editor.dismissCreditNotice}
                 />
               )}
             </div>

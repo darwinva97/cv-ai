@@ -24,7 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { createResume } from "@/actions/resume";
+import { createResume, createResumeVersion } from "@/actions/resume";
 import { useSession } from "@/lib/auth-client";
 
 function NewResumeContent() {
@@ -75,8 +75,16 @@ function NewResumeContent() {
         description: description.trim() || undefined,
       });
 
-      // TODO: Call AI generation API with jobOfferText/jobOfferLink and prompt
-      // For now, just navigate to the new resume
+      // Seed an initial version carrying the prompt + job offer so the editor
+      // opens ready to run "Generar con IA" (which uses the active provider).
+      await createResumeVersion({
+        resumeId: newResume.id,
+        title: "Versión 1",
+        prompt: prompt.trim() || undefined,
+        jobOfferText: jobOfferText.trim() || undefined,
+        jobOfferLink: jobOfferLink.trim() || undefined,
+      });
+
       router.push(`/resume/${newResume.id}`);
     } catch (error) {
       console.error(error);

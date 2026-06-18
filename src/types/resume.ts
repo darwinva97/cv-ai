@@ -177,7 +177,7 @@ export interface ResumeData {
 }
 
 // AI Provider types
-export type AIProviderType = "anthropic" | "openai" | "other";
+export type AIProviderType = "anthropic" | "openai" | "google" | "other";
 
 export interface AIProvider {
   id: string;

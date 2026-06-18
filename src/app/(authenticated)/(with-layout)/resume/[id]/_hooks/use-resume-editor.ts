@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import type { ResumeStyleConfig } from "@/db/schema/style";
 import { defaultStyleConfig } from "@/db/schema/style";
 import type { ParsedResumeData } from "@/lib/ai-resume-analyzer";
@@ -15,6 +16,7 @@ import {
   updateVersionBasics,
   createVersionBasics,
 } from "@/actions/resume";
+import { generateVersionContent } from "@/actions/ai";
 
 export type EditMode = "none" | "edit" | "create";
 export type ActiveSection = "basics" | "work" | "education" | "skills" | "settings" | "ai";
@@ -35,6 +37,11 @@ export function useResumeEditor(resumeId: string) {
   // Loading states
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  // Set when a generation is blocked for lack of credits → drives the upsell panel.
+  const [creditNotice, setCreditNotice] = useState<
+    { balance?: number; estCost?: number } | null
+  >(null);
 
   // UI states
   const [activeSection, setActiveSection] = useState<ActiveSection>("basics");
@@ -252,6 +259,101 @@ export function useResumeEditor(resumeId: string) {
     }
   };
 
+  const handleGenerate = async () => {
+    if (!currentVersionId) {
+      toast.error("Guarda la versión antes de generar con IA.");
+      return;
+    }
+    setIsGenerating(true);
+    setCreditNotice(null);
+    try {
+      const result = await generateVersionContent(currentVersionId, {
+        prompt: aiPrompt.trim() || undefined,
+        jobOffer: jobOffer.trim() || undefined,
+      });
+
+      if (!result.ok) {
+        if (result.code === "insufficient_credits") {
+          // Surface an upsell panel with balance + estimated cost + CTAs.
+          setCreditNotice({ balance: result.balance, estCost: result.estCost });
+        }
+        toast.error(result.error);
+        return;
+      }
+
+      const { summary, work, education, skills } = result.data;
+
+      // Apply optimized basics summary unless the user pinned it.
+      if (summary && !(basics.pinnedFields || []).includes("summary")) {
+        setBasics((prev) => ({
+          ...prev,
+          summary,
+          aiModifiedFields: Array.from(
+            new Set([...(prev.aiModifiedFields || []), "summary"])
+          ),
+        }));
+      }
+
+      if (work?.length) {
+        setWorkExperiences(
+          work.map((w, i) => ({
+            id: `ai-${Date.now()}-${i}`,
+            name: w.name || "",
+            position: w.position || "",
+            startDate: w.startDate || "",
+            endDate: w.endDate || "",
+            summary: w.summary || "",
+            highlights: w.highlights || [],
+            pinnedFields: [],
+            aiModifiedFields: ["summary", "highlights"],
+          }))
+        );
+      }
+
+      if (education?.length) {
+        setEducations(
+          education.map((e, i) => ({
+            id: `ai-${Date.now()}-${i}`,
+            institution: e.institution || "",
+            area: e.area || "",
+            studyType: e.studyType || "",
+            startDate: e.startDate || "",
+            endDate: e.endDate || "",
+            courses: [],
+            pinnedFields: [],
+            aiModifiedFields: [],
+          }))
+        );
+      }
+
+      if (skills?.length) {
+        setSkills(
+          skills.map((s, i) => ({
+            id: `ai-${Date.now()}-${i}`,
+            name: s.name || "",
+            level: s.level || "",
+            keywords: s.keywords || [],
+            pinnedFields: [],
+            aiModifiedFields: ["keywords"],
+          }))
+        );
+      }
+
+      if (result.source === "byok") {
+        toast.success("Contenido generado con tu clave, gratis. Revísalo y guarda.");
+      } else {
+        toast.success(
+          `Generado · ${result.charged} créditos · saldo ${result.remaining}. Revísalo y guarda.`
+        );
+      }
+    } catch (error) {
+      console.error("Error generating with AI:", error);
+      toast.error("Ocurrió un error al generar con IA.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   // Field helpers
   const toggleFieldPin = (field: string) => {
     setBasics((prev) => {
@@ -351,6 +453,9 @@ export function useResumeEditor(resumeId: string) {
     // States
     isLoading,
     isSaving,
+    isGenerating,
+    creditNotice,
+    dismissCreditNotice: () => setCreditNotice(null),
     activeSection,
     editMode,
     showPreview,
@@ -390,6 +495,7 @@ export function useResumeEditor(resumeId: string) {
     handleStartCreate,
     handleStyleSelect,
     handleScreenshotAnalysis,
+    handleGenerate,
 
     // Field helpers
     toggleFieldPin,

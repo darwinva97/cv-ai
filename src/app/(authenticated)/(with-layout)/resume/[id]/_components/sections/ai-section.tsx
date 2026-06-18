@@ -1,6 +1,7 @@
 "use client";
 
-import { Upload, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { Upload, Sparkles, Loader2, Coins, CreditCard, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +15,10 @@ interface AISectionProps {
   onAiPromptChange: (value: string) => void;
   onJobOfferChange: (value: string) => void;
   onScreenshotAnalysis: (data: ParsedResumeData) => void;
+  onGenerate: () => void;
+  isGenerating: boolean;
+  creditNotice?: { balance?: number; estCost?: number } | null;
+  onDismissCreditNotice?: () => void;
 }
 
 export function AISection({
@@ -22,6 +27,10 @@ export function AISection({
   onAiPromptChange,
   onJobOfferChange,
   onScreenshotAnalysis,
+  onGenerate,
+  isGenerating,
+  creditNotice,
+  onDismissCreditNotice,
 }: AISectionProps) {
   return (
     <div className="space-y-6">
@@ -72,10 +81,55 @@ export function AISection({
             />
           </div>
 
-          <Button className="w-full" size="sm">
-            <Sparkles className="h-4 w-4 mr-2" />
-            Generar con IA
+          <Button
+            className="w-full"
+            size="sm"
+            onClick={onGenerate}
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4 mr-2" />
+            )}
+            {isGenerating ? "Generando…" : "Generar con IA"}
           </Button>
+
+          {creditNotice && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+              <div>
+                <h4 className="text-sm font-semibold">Créditos insuficientes</h4>
+                <p className="text-xs text-muted-foreground">
+                  Saldo: {creditNotice.balance ?? 0}
+                  {typeof creditNotice.estCost === "number" &&
+                    ` · costo estimado: ${creditNotice.estCost}`}
+                  . Compra créditos, suscríbete, o usa tu propia API key (gratis).
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" asChild>
+                  <Link href="/billing">
+                    <Coins className="mr-1 h-4 w-4" /> Comprar créditos
+                  </Link>
+                </Button>
+                <Button size="sm" variant="outline" asChild>
+                  <Link href="/billing">
+                    <CreditCard className="mr-1 h-4 w-4" /> Suscribirme
+                  </Link>
+                </Button>
+                <Button size="sm" variant="outline" asChild>
+                  <Link href="/settings/ai">
+                    <KeyRound className="mr-1 h-4 w-4" /> Usar mi API key
+                  </Link>
+                </Button>
+                {onDismissCreditNotice && (
+                  <Button size="sm" variant="ghost" onClick={onDismissCreditNotice}>
+                    Descartar
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

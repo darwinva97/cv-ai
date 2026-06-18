@@ -1,7 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { useSession } from "@/lib/auth-client";
+import {
+  getAIProviders,
+  createAIProvider,
+  updateAIProvider,
+  deleteAIProvider,
+} from "@/actions/ai";
 import {
   ArrowLeft,
   Check,
@@ -50,37 +58,22 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 
+type ProviderKind = "anthropic" | "openai" | "google" | "other";
+
 interface AIProvider {
   id: string;
   name: string;
   model: string;
-  provider: "anthropic" | "openai" | "other";
+  provider: ProviderKind;
   isActive: boolean;
   createdAt: string;
 }
 
-// Datos de ejemplo
-const mockProviders: AIProvider[] = [
-  {
-    id: "1",
-    name: "OpenAI GPT-4",
-    model: "gpt-4-turbo",
-    provider: "openai",
-    isActive: true,
-    createdAt: "2026-01-01",
-  },
-  {
-    id: "2",
-    name: "Claude 3 Opus",
-    model: "claude-3-opus-20240229",
-    provider: "anthropic",
-    isActive: false,
-    createdAt: "2025-12-15",
-  },
-];
-
 export default function AISettingsPage() {
-  const [providers, setProviders] = useState<AIProvider[]>(mockProviders);
+  const { data: session } = useSession();
+  const userId = session?.user?.id;
+
+  const [providers, setProviders] = useState<AIProvider[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
@@ -90,56 +83,105 @@ export default function AISettingsPage() {
     model: string;
     token: string;
     url: string;
-    provider: "anthropic" | "openai" | "other";
+    provider: ProviderKind;
   }>({
     name: "",
     model: "",
     token: "",
     url: "",
-    provider: "openai",
+    provider: "google",
   });
 
+  const loadProviders = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const rows = await getAIProviders(userId);
+      setProviders(
+        rows.map((p) => ({
+          id: p.id,
+          name: p.name,
+          model: p.model,
+          provider: p.providerAi as ProviderKind,
+          isActive: p.isActive,
+          createdAt:
+            p.createdAt instanceof Date
+              ? p.createdAt.toISOString()
+              : String(p.createdAt),
+        }))
+      );
+    } catch (err) {
+      console.error("Error loading AI providers:", err);
+      toast.error("No se pudieron cargar los proveedores.");
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    loadProviders();
+  }, [loadProviders]);
+
   const handleAddProvider = async () => {
+    if (!userId) {
+      toast.error("Inicia sesión para configurar proveedores.");
+      return;
+    }
     if (!newProvider.name || !newProvider.model || !newProvider.token) return;
 
     setIsSaving(true);
     try {
-      // TODO: Llamar a la API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const provider: AIProvider = {
-        id: Date.now().toString(),
+      await createAIProvider({
+        userId,
         name: newProvider.name,
         model: newProvider.model,
-        provider: newProvider.provider,
-        isActive: false,
-        createdAt: new Date().toISOString(),
-      };
-
-      setProviders([...providers, provider]);
+        token: newProvider.token,
+        url: newProvider.url || undefined,
+        providerAi: newProvider.provider,
+      });
+      await loadProviders();
       setNewProvider({
         name: "",
         model: "",
         token: "",
         url: "",
-        provider: "openai",
+        provider: "google",
       });
       setIsAddDialogOpen(false);
+      toast.success("Proveedor añadido y activado.");
+    } catch (err) {
+      console.error("Error creating AI provider:", err);
+      toast.error("No se pudo guardar el proveedor.");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleToggleActive = async (id: string) => {
-    setProviders(
-      providers.map((p) =>
-        p.id === id ? { ...p, isActive: !p.isActive } : { ...p, isActive: false }
-      )
+    if (!userId) return;
+    const target = providers.find((p) => p.id === id);
+    if (!target) return;
+    // Optimistic: activating one deactivates the rest.
+    setProviders((prev) =>
+      prev.map((p) => ({ ...p, isActive: p.id === id ? !target.isActive : false }))
     );
+    try {
+      await updateAIProvider(id, userId, { isActive: !target.isActive });
+      await loadProviders();
+    } catch (err) {
+      console.error("Error updating AI provider:", err);
+      toast.error("No se pudo actualizar el proveedor.");
+      loadProviders();
+    }
   };
 
   const handleDeleteProvider = async (id: string) => {
-    setProviders(providers.filter((p) => p.id !== id));
+    if (!userId) return;
+    setProviders((prev) => prev.filter((p) => p.id !== id));
+    try {
+      await deleteAIProvider(id, userId);
+    } catch (err) {
+      console.error("Error deleting AI provider:", err);
+      toast.error("No se pudo eliminar el proveedor.");
+      loadProviders();
+    }
   };
 
   const getProviderIcon = (provider: string) => {
@@ -154,6 +196,12 @@ export default function AISettingsPage() {
         return (
           <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
             <path d="M17.304 3.541h-3.672l6.696 16.918H24l-6.696-16.918zM6.696 3.541 0 20.459h3.768l1.34-3.527h6.68l1.336 3.527h3.768L10.2 3.541H6.696zm-.576 10.602 2.328-6.12 2.328 6.12H6.12z" />
+          </svg>
+        );
+      case "google":
+        return (
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 11v2.4h5.66c-.23 1.48-1.72 4.34-5.66 4.34-3.41 0-6.19-2.82-6.19-6.3S8.59 5.7 12 5.7c1.94 0 3.24.83 3.98 1.54l2.71-2.61C16.96 2.99 14.7 2 12 2 6.48 2 2 6.48 2 12s4.48 10 10 10c5.77 0 9.6-4.06 9.6-9.77 0-.66-.07-1.16-.16-1.66H12z" />
           </svg>
         );
       default:
@@ -222,7 +270,7 @@ export default function AISettingsPage() {
                   <Label htmlFor="provider-type">Proveedor</Label>
                   <Select
                     value={newProvider.provider}
-                    onValueChange={(value: "openai" | "anthropic" | "other") =>
+                    onValueChange={(value: ProviderKind) =>
                       setNewProvider({ ...newProvider, provider: value })
                     }
                   >
@@ -230,6 +278,7 @@ export default function AISettingsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="google">Google (Gemini)</SelectItem>
                       <SelectItem value="openai">OpenAI</SelectItem>
                       <SelectItem value="anthropic">Anthropic</SelectItem>
                       <SelectItem value="other">Otro (Compatible OpenAI)</SelectItem>
@@ -251,7 +300,7 @@ export default function AISettingsPage() {
                   <Label htmlFor="provider-model">Modelo</Label>
                   <Input
                     id="provider-model"
-                    placeholder="Ej: gpt-4-turbo, claude-3-opus"
+                    placeholder="Ej: gemini-2.5-flash, gpt-4.1-mini, claude-sonnet-4-5"
                     value={newProvider.model}
                     onChange={(e) =>
                       setNewProvider({ ...newProvider, model: e.target.value })

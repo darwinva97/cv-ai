@@ -11,8 +11,10 @@ import {
   Moon,
   Palette,
   Settings,
+  Shield,
   Sparkles,
   Sun,
+  CreditCard,
   User,
   ChevronLeft,
   ChevronRight,
@@ -38,6 +40,7 @@ const navigation = [
   { name: "Mis CVs", href: "/resumes", icon: FileText },
   { name: "Estilos", href: "/styles", icon: Palette },
   { name: "Configuración IA", href: "/settings/ai", icon: Sparkles },
+  { name: "Facturación", href: "/billing", icon: CreditCard },
 ];
 
 export default function AuthenticatedLayout({
@@ -47,6 +50,11 @@ export default function AuthenticatedLayout({
 }) {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const isAdmin =
+    (session?.user as { role?: string } | undefined)?.role === "admin";
+  const navItems = isAdmin
+    ? [...navigation, { name: "Admin", href: "/admin", icon: Shield }]
+    : navigation;
   const { theme, setTheme } = useTheme();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -117,7 +125,7 @@ export default function AuthenticatedLayout({
 
           {/* Navigation */}
           <nav className="flex-1 space-y-1 p-4">
-            {navigation.map((item) => {
+            {navItems.map((item) => {
               const isActive = pathname.startsWith(item.href);
               return (
                 <Link
