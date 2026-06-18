@@ -76,6 +76,20 @@ export const plan = pgTable("plan", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ---- credit_pack: one-time purchasable bundles of non-expiring credits ----
+export const creditPack = pgTable("credit_pack", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  credits: integer("credits").notNull(), // granted as non-expiring on purchase
+  priceCents: integer("price_cents").notNull().default(0), // display + checkout amount
+  currency: text("currency").notNull().default("USD"),
+  externalProvider: text("external_provider"), // payment seam (e.g. "lemonsqueezy")
+  externalId: text("external_id"), // gateway variant/price id (e.g. LS variant id)
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ---- subscription: user <-> plan ----
 export const subscription = pgTable(
   "subscription",

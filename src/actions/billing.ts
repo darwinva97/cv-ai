@@ -2,7 +2,7 @@
 
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { plan, subscription, aiUsageLog } from "@/db/schema/billing";
+import { plan, subscription, aiUsageLog, creditPack } from "@/db/schema/billing";
 import {
   getBillingSummary as getBillingSummaryLib,
   type BillingSummary,
@@ -38,6 +38,14 @@ export interface BillingOverview {
     name: string;
     description: string | null;
     monthlyCredits: number;
+    priceCents: number;
+    currency: string;
+  }>;
+  packs: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    credits: number;
     priceCents: number;
     currency: string;
   }>;
@@ -99,6 +107,19 @@ export async function getBillingOverview(): Promise<BillingOverview> {
     .where(eq(plan.isActive, true))
     .orderBy(plan.priceCents);
 
+  const packs = await db
+    .select({
+      id: creditPack.id,
+      name: creditPack.name,
+      description: creditPack.description,
+      credits: creditPack.credits,
+      priceCents: creditPack.priceCents,
+      currency: creditPack.currency,
+    })
+    .from(creditPack)
+    .where(eq(creditPack.isActive, true))
+    .orderBy(creditPack.priceCents);
+
   return {
     summary,
     subscription: sub
@@ -111,6 +132,7 @@ export async function getBillingOverview(): Promise<BillingOverview> {
       : null,
     usage,
     plans,
+    packs,
     paymentsStubbed: paymentsAreStubbed(),
   };
 }
@@ -122,11 +144,7 @@ export async function startSubscriptionCheckout(planId: string): Promise<Checkou
 }
 
 /** Begin a credit-pack checkout (Stub → no URL). */
-export async function startCreditCheckout(input: {
-  credits: number;
-  priceCents: number;
-  currency?: string;
-}): Promise<CheckoutResult> {
+export async function startCreditCheckout(packId: string): Promise<CheckoutResult> {
   const userId = await requireUserId();
-  return getPaymentProvider().createCreditCheckout({ userId, ...input });
+  return getPaymentProvider().createCreditCheckout({ userId, packId });
 }

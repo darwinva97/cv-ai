@@ -36,10 +36,8 @@ export interface SubscriptionCheckoutParams {
 
 export interface CreditCheckoutParams {
   userId: string;
-  /** Number of (non-expiring) credits being purchased. */
-  credits: number;
-  priceCents: number;
-  currency?: string;
+  /** The credit_pack being purchased (provider resolves credits + gateway variant). */
+  packId: string;
   successUrl?: string;
   cancelUrl?: string;
 }

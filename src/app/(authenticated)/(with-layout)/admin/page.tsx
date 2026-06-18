@@ -6,6 +6,7 @@ import {
   Coins,
   CreditCard,
   Activity,
+  ShoppingCart,
 } from "lucide-react";
 import {
   Card,
@@ -32,6 +33,12 @@ const sections = [
     title: "Planes",
     description: "Bolsas mensuales de créditos para suscripciones.",
     icon: Package,
+  },
+  {
+    href: "/admin/credit-packs",
+    title: "Paquetes de créditos",
+    description: "Packs de pago por uso (no expiran) para venta directa.",
+    icon: ShoppingCart,
   },
   {
     href: "/admin/credits",

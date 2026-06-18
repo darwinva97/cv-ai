@@ -3,7 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { listPlans, createPlan, updatePlan, deletePlan } from "@/actions/admin/plans";
+import {
+  listCreditPacks,
+  createCreditPack,
+  updateCreditPack,
+  deleteCreditPack,
+} from "@/actions/admin/credit-packs";
 import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,28 +33,28 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type PlanRow = Awaited<ReturnType<typeof listPlans>>[number];
+type PackRow = Awaited<ReturnType<typeof listCreditPacks>>[number];
 
 const emptyForm = {
   name: "",
   description: "",
-  monthlyCredits: 1000,
+  credits: 1000,
   priceCents: 500,
   currency: "USD",
   externalId: "",
 };
 
-export default function AdminPlansPage() {
-  const [rows, setRows] = useState<PlanRow[]>([]);
+export default function AdminCreditPacksPage() {
+  const [rows, setRows] = useState<PackRow[]>([]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
 
   const load = useCallback(async () => {
     try {
-      setRows(await listPlans());
+      setRows(await listCreditPacks());
     } catch {
-      toast.error("No se pudieron cargar los planes.");
+      toast.error("No se pudieron cargar los paquetes.");
     }
   }, []);
 
@@ -61,10 +66,10 @@ export default function AdminPlansPage() {
     if (!form.name) return;
     setSaving(true);
     try {
-      await createPlan({
+      await createCreditPack({
         name: form.name,
         description: form.description || undefined,
-        monthlyCredits: Number(form.monthlyCredits),
+        credits: Number(form.credits),
         priceCents: Number(form.priceCents),
         currency: form.currency,
         externalId: form.externalId || undefined,
@@ -72,18 +77,18 @@ export default function AdminPlansPage() {
       setForm(emptyForm);
       setOpen(false);
       await load();
-      toast.success("Plan creado.");
+      toast.success("Paquete creado.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo crear el plan.");
+      toast.error(err instanceof Error ? err.message : "No se pudo crear el paquete.");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleToggle = async (r: PlanRow) => {
+  const handleToggle = async (r: PackRow) => {
     setRows((prev) => prev.map((p) => (p.id === r.id ? { ...p, isActive: !p.isActive } : p)));
     try {
-      await updatePlan(r.id, { isActive: !r.isActive });
+      await updateCreditPack(r.id, { isActive: !r.isActive });
     } catch {
       toast.error("No se pudo actualizar.");
       load();
@@ -93,9 +98,9 @@ export default function AdminPlansPage() {
   const handleDelete = async (id: string) => {
     setRows((prev) => prev.filter((p) => p.id !== id));
     try {
-      await deletePlan(id);
+      await deleteCreditPack(id);
     } catch {
-      toast.error("No se pudo eliminar (¿tiene suscripciones?).");
+      toast.error("No se pudo eliminar.");
       load();
     }
   };
@@ -109,27 +114,27 @@ export default function AdminPlansPage() {
           </Link>
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold">Planes</h1>
+          <h1 className="text-3xl font-bold">Paquetes de créditos</h1>
           <p className="text-muted-foreground">
-            Bolsas mensuales de créditos. El precio es solo display hasta conectar la pasarela.
+            Packs de pago por uso (no expiran). El &quot;LS variant id&quot; los conecta con Lemon Squeezy.
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="mr-2 h-4 w-4" /> Añadir plan
+              <Plus className="mr-2 h-4 w-4" /> Añadir paquete
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Añadir plan</DialogTitle>
-              <DialogDescription>Define la bolsa mensual de créditos.</DialogDescription>
+              <DialogTitle>Añadir paquete</DialogTitle>
+              <DialogDescription>Bundle de créditos que no expiran.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Nombre</Label>
                 <Input
-                  placeholder="Pro"
+                  placeholder="Pack 1.000"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
@@ -137,18 +142,17 @@ export default function AdminPlansPage() {
               <div className="space-y-2">
                 <Label>Descripción</Label>
                 <Input
-                  placeholder="Para uso intensivo"
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-2">
-                  <Label>Créditos/mes</Label>
+                  <Label>Créditos</Label>
                   <Input
                     type="number"
-                    value={form.monthlyCredits}
-                    onChange={(e) => setForm({ ...form, monthlyCredits: Number(e.target.value) })}
+                    value={form.credits}
+                    onChange={(e) => setForm({ ...form, credits: Number(e.target.value) })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -170,7 +174,7 @@ export default function AdminPlansPage() {
               <div className="space-y-2">
                 <Label>LS variant id (opcional)</Label>
                 <Input
-                  placeholder="123456 — variant de Lemon Squeezy"
+                  placeholder="123456"
                   value={form.externalId}
                   onChange={(e) => setForm({ ...form, externalId: e.target.value })}
                 />
@@ -191,19 +195,19 @@ export default function AdminPlansPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Planes ({rows.length})</CardTitle>
+          <CardTitle>Paquetes ({rows.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sin planes configurados.</p>
+            <p className="text-sm text-muted-foreground">Sin paquetes configurados.</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
-                  <TableHead>Descripción</TableHead>
-                  <TableHead className="text-right">Créditos/mes</TableHead>
+                  <TableHead className="text-right">Créditos</TableHead>
                   <TableHead className="text-right">Precio</TableHead>
+                  <TableHead>LS variant</TableHead>
                   <TableHead className="text-right">Activo</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -212,11 +216,11 @@ export default function AdminPlansPage() {
                 {rows.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-medium">{r.name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{r.description}</TableCell>
-                    <TableCell className="text-right tabular-nums">{r.monthlyCredits}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.credits}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {(r.priceCents / 100).toFixed(2)} {r.currency}
                     </TableCell>
+                    <TableCell className="font-mono text-xs">{r.externalId ?? "—"}</TableCell>
                     <TableCell className="text-right">
                       <Switch checked={r.isActive} onCheckedChange={() => handleToggle(r)} />
                     </TableCell>

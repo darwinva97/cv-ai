@@ -1,6 +1,7 @@
 import "server-only";
 import type { PaymentProvider } from "./types";
 import { stubPaymentProvider } from "./stub";
+import { lemonSqueezyProvider } from "./lemonsqueezy";
 
 export * from "./types";
 
@@ -11,7 +12,8 @@ export * from "./types";
 export function getPaymentProvider(): PaymentProvider {
   const configured = process.env.PAYMENT_PROVIDER?.toLowerCase();
   switch (configured) {
-    // case "lemonsqueezy": return lemonSqueezyProvider;
+    case "lemonsqueezy":
+      return lemonSqueezyProvider;
     // case "paddle": return paddleProvider;
     // case "paypal": return paypalProvider;
     default:

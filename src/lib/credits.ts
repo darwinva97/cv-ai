@@ -245,6 +245,35 @@ export async function grantCredits(
 
   return db.transaction(async (tx) => {
     await lockAccount(tx, userId);
+
+    // Idempotency: if this external event was already granted, do nothing.
+    // Guards against payment-webhook retries double-crediting a user.
+    if (opts.externalId && opts.externalProvider) {
+      const [dup] = await tx
+        .select({ id: creditTransaction.id })
+        .from(creditTransaction)
+        .where(
+          and(
+            eq(creditTransaction.userId, userId),
+            eq(creditTransaction.externalProvider, opts.externalProvider),
+            eq(creditTransaction.externalId, opts.externalId)
+          )
+        )
+        .limit(1);
+      if (dup) {
+        const [cur] = await tx
+          .select()
+          .from(billingAccount)
+          .where(eq(billingAccount.userId, userId));
+        return {
+          expiringBalance: cur.expiringBalance,
+          nonExpiringBalance: cur.nonExpiringBalance,
+          total: cur.expiringBalance + cur.nonExpiringBalance,
+          nextExpiry: null,
+        };
+      }
+    }
+
     const [acct] = await tx
       .update(billingAccount)
       .set(

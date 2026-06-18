@@ -2,35 +2,35 @@
 
 import { eq, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { plan } from "@/db/schema/billing";
+import { creditPack } from "@/db/schema/billing";
 import { requireAdmin } from "@/lib/auth-helpers";
 
-/** Admin CRUD for subscription plan definitions (monthly credit bags). */
+/** Admin CRUD for one-time credit packs (non-expiring). externalId = gateway variant id. */
 
-export async function listPlans() {
+export async function listCreditPacks() {
   await requireAdmin();
-  return db.select().from(plan).orderBy(desc(plan.createdAt));
+  return db.select().from(creditPack).orderBy(desc(creditPack.createdAt));
 }
 
-export interface PlanInput {
+export interface CreditPackInput {
   name: string;
   description?: string;
-  monthlyCredits: number;
+  credits: number;
   priceCents?: number;
   currency?: string;
-  externalId?: string | null; // gateway variant id (Lemon Squeezy)
+  externalId?: string | null;
   isActive?: boolean;
 }
 
-export async function createPlan(input: PlanInput) {
+export async function createCreditPack(input: CreditPackInput) {
   await requireAdmin();
   if (!input.name) throw new Error("name es obligatorio.");
   const [row] = await db
-    .insert(plan)
+    .insert(creditPack)
     .values({
       name: input.name,
       description: input.description || null,
-      monthlyCredits: input.monthlyCredits,
+      credits: input.credits,
       priceCents: input.priceCents ?? 0,
       currency: input.currency ?? "USD",
       externalProvider: input.externalId ? "lemonsqueezy" : null,
@@ -41,7 +41,7 @@ export async function createPlan(input: PlanInput) {
   return row;
 }
 
-export async function updatePlan(id: string, input: Partial<PlanInput>) {
+export async function updateCreditPack(id: string, input: Partial<CreditPackInput>) {
   await requireAdmin();
   const patch: Record<string, unknown> = { ...input };
   if (input.externalId !== undefined) {
@@ -49,14 +49,14 @@ export async function updatePlan(id: string, input: Partial<PlanInput>) {
     patch.externalProvider = input.externalId ? "lemonsqueezy" : null;
   }
   const [row] = await db
-    .update(plan)
+    .update(creditPack)
     .set(patch)
-    .where(eq(plan.id, id))
+    .where(eq(creditPack.id, id))
     .returning();
   return row;
 }
 
-export async function deletePlan(id: string): Promise<void> {
+export async function deleteCreditPack(id: string): Promise<void> {
   await requireAdmin();
-  await db.delete(plan).where(eq(plan.id, id));
+  await db.delete(creditPack).where(eq(creditPack.id, id));
 }

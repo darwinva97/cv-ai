@@ -76,9 +76,9 @@ export default function BillingPage() {
     }
   };
 
-  const handleBuyCredits = async () => {
+  const handleBuyPack = async (packId: string) => {
     try {
-      const res = await startCreditCheckout({ credits: 1000, priceCents: 500 });
+      const res = await startCreditCheckout(packId);
       if (res.stub || !res.url) {
         toast.info("La compra de créditos estará disponible próximamente.");
         return;
@@ -175,9 +175,12 @@ export default function BillingPage() {
           )}
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={handleBuyCredits}>
-              <Coins className="mr-2 h-4 w-4" /> Comprar créditos
-            </Button>
+            {(data?.packs ?? []).map((pack) => (
+              <Button key={pack.id} onClick={() => handleBuyPack(pack.id)}>
+                <Coins className="mr-2 h-4 w-4" />
+                {pack.name} · {pack.credits} cr · {(pack.priceCents / 100).toFixed(2)} {pack.currency}
+              </Button>
+            ))}
             {(data?.plans ?? []).map((p) => (
               <Button key={p.id} variant="outline" onClick={() => handleSubscribe(p.id)}>
                 <Sparkles className="mr-2 h-4 w-4" />
@@ -190,6 +193,11 @@ export default function BillingPage() {
               </Link>
             </Button>
           </div>
+          {(data?.packs ?? []).length === 0 && (data?.plans ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Aún no hay paquetes ni planes disponibles.
+            </p>
+          )}
           {data?.paymentsStubbed && (
             <p className="text-xs text-muted-foreground">
               Los pagos en línea estarán disponibles próximamente. Mientras tanto, un

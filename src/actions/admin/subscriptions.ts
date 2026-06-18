@@ -4,16 +4,14 @@ import { eq, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { user } from "@/db/schema/auth";
 import { plan, subscription } from "@/db/schema/billing";
-import { grantCredits } from "@/lib/credits";
+import { provisionSubscription } from "@/lib/subscriptions";
 import { requireAdmin } from "@/lib/auth-helpers";
 
 /**
  * Admin subscription management. Assigning/renewing a subscription grants the
  * plan's monthly credit bag as an EXPIRING grant (expiresAt = period end),
- * reusing grantCredits — identical to what a billing webhook will do.
+ * via the same provisionSubscription() a billing webhook uses.
  */
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function listSubscriptions() {
   await requireAdmin();
@@ -47,31 +45,11 @@ export async function assignSubscription(input: {
   periodDays?: number;
 }) {
   await requireAdmin();
-  const [p] = await db.select().from(plan).where(eq(plan.id, input.planId));
-  if (!p) throw new Error("Plan no encontrado.");
-
-  const now = new Date();
-  const periodEnd = new Date(now.getTime() + (input.periodDays ?? 30) * DAY_MS);
-
-  const [sub] = await db
-    .insert(subscription)
-    .values({
-      userId: input.userId,
-      planId: input.planId,
-      status: "active",
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-    })
-    .returning();
-
-  await grantCredits(input.userId, p.monthlyCredits, {
-    expiring: true,
-    expiresAt: periodEnd,
-    kind: "subscription_grant",
-    source: "subscription_renewal",
+  return provisionSubscription({
+    userId: input.userId,
+    planId: input.planId,
+    periodDays: input.periodDays,
   });
-
-  return sub;
 }
 
 export async function cancelSubscription(id: string, immediately = false) {

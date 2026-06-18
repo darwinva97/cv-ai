@@ -83,7 +83,7 @@ export async function pickSystemKey(
   };
 }
 
-function classifyError(err: unknown): "auth" | "ratelimit" | "other" {
+export function classifyError(err: unknown): "auth" | "ratelimit" | "other" {
   const e = err as { statusCode?: number; status?: number; message?: string };
   const status = e?.statusCode ?? e?.status;
   const msg = (e?.message ?? String(err)).toLowerCase();
@@ -97,7 +97,7 @@ function classifyError(err: unknown): "auth" | "ratelimit" | "other" {
 }
 
 /** Errors that should burn the key + try the next one (vs. surface immediately). */
-function isKeyError(err: unknown): boolean {
+export function isKeyError(err: unknown): boolean {
   return classifyError(err) !== "other" || /overloaded|503|502|unavailable/.test(String((err as Error)?.message ?? err).toLowerCase());
 }
 
