@@ -7,8 +7,10 @@ export async function proxy(request: NextRequest) {
   // Get the pathname
   const { pathname } = request.nextUrl;
 
-  // Public routes that don't require authentication
-  const publicRoutes = ["/", "/login", "/resume-result"];
+  // Public routes that don't require authentication.
+  // /privacy and /terms must be reachable without login (required by Google's
+  // OAuth consent screen and for general legal accessibility).
+  const publicRoutes = ["/", "/login", "/resume-result", "/privacy", "/terms"];
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route || pathname.startsWith("/resume-result/")
   );
