@@ -10,7 +10,9 @@ import { auth } from "@/lib/auth";
 import { getVersionData } from "@/actions/resume";
 import {
   generateResumeContent,
+  extractResumeFromFile,
   type GeneratedResume,
+  type ExtractedResume,
   type GenerateInput,
   type ProviderType,
 } from "@/lib/ai-generate";
@@ -334,6 +336,187 @@ export async function generateVersionContent(
       ok: false,
       code: "generation_failed",
       error: err instanceof Error ? `La generación falló: ${err.message}` : "La generación con IA falló.",
+    };
+  }
+}
+
+export type AnalyzeFilePayload =
+  | {
+      ok: true;
+      data: ExtractedResume;
+      charged: number;
+      source: "byok" | "system";
+      remaining: number;
+    }
+  | {
+      ok: false;
+      code:
+        | "unauthenticated"
+        | "unsupported_type"
+        | "no_system_key"
+        | "no_pricing"
+        | "insufficient_credits"
+        | "analysis_failed";
+      error: string;
+      balance?: number;
+      estCost?: number;
+    };
+
+const ALLOWED_IMPORT_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+]);
+
+/**
+ * Extract structured resume data from an uploaded file (image or PDF).
+ *
+ * Same source resolution as generateVersionContent: a user's own active key
+ * (BYOK) runs free; otherwise the platform key pool runs the call and credits
+ * are metered. Returns suggestions for the editor to apply (nothing persisted).
+ */
+export async function analyzeResumeFile(input: {
+  base64: string;
+  mediaType: string;
+}): Promise<AnalyzeFilePayload> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) {
+    return { ok: false, code: "unauthenticated", error: "No autenticado." };
+  }
+  const userId = session.user.id;
+
+  if (!ALLOWED_IMPORT_TYPES.has(input.mediaType)) {
+    return {
+      ok: false,
+      code: "unsupported_type",
+      error: "Formato no soportado. Usa una imagen (PNG/JPG/WEBP) o un PDF.",
+    };
+  }
+
+  const file = { data: input.base64, mediaType: input.mediaType };
+
+  // ---- BYOK: user's own active key → free, no credits ----
+  const ownKey = await getActiveAIProvider(userId);
+  if (ownKey) {
+    try {
+      const { object, usage } = await extractResumeFromFile({
+        provider: {
+          providerAi: ownKey.providerAi as ProviderType,
+          model: ownKey.model,
+          token: ownKey.token,
+          url: ownKey.url,
+        },
+        file,
+      });
+      await db.insert(aiUsageLog).values({
+        userId,
+        providerAi: ownKey.providerAi,
+        model: ownKey.model,
+        source: "user_key",
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        creditsCharged: 0,
+        status: "success",
+      });
+      const summary = await getBillingSummary(userId);
+      return { ok: true, data: object, charged: 0, source: "byok", remaining: summary.total };
+    } catch (err) {
+      console.error("BYOK file analysis failed:", err);
+      return {
+        ok: false,
+        code: "analysis_failed",
+        error: err instanceof Error ? `El análisis falló: ${err.message}` : "El análisis del archivo falló.",
+      };
+    }
+  }
+
+  // ---- System key + credits ----
+  const target = await getDefaultSystemTarget();
+  if (!target) {
+    return {
+      ok: false,
+      code: "no_system_key",
+      error: "No hay un modelo del sistema disponible. Configura tu propia API key en Ajustes → IA.",
+    };
+  }
+
+  const pricing = await getPricing(target.providerAi, target.model);
+  if (!pricing) {
+    return {
+      ok: false,
+      code: "no_pricing",
+      error: "El modelo del sistema no tiene tarifa configurada. Contacta al administrador.",
+    };
+  }
+
+  // Conservative pre-call estimate; the real cost is reconciled from usage.
+  const estCost = estimateCost(pricing, 16000);
+
+  let reservation;
+  try {
+    reservation = await reserveCredits(userId, target.providerAi, target.model, estCost);
+  } catch (err) {
+    if (err instanceof CreditError && err.code === "insufficient_credits") {
+      return {
+        ok: false,
+        code: "insufficient_credits",
+        error: "No tienes créditos suficientes. Compra créditos, suscríbete, o usa tu propia API key.",
+        balance: err.balance,
+        estCost: err.estCost,
+      };
+    }
+    throw err;
+  }
+
+  try {
+    const { result, keyId } = await runWithSystemKey(target.providerAi, target.model, (key) =>
+      extractResumeFromFile({
+        provider: {
+          providerAi: key.providerAi as ProviderType,
+          model: key.model,
+          token: key.token,
+          url: key.url,
+        },
+        file,
+      })
+    );
+    const { object, usage } = result;
+    const actualCost = priceOf(pricing, usage);
+
+    const [log] = await db
+      .insert(aiUsageLog)
+      .values({
+        userId,
+        providerAi: target.providerAi as never,
+        model: target.model,
+        source: "system_key",
+        systemKeyId: keyId,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        creditsCharged: actualCost,
+        status: "success",
+      })
+      .returning();
+
+    const { creditsCharged, remaining } = await reconcileCharge(userId, reservation, actualCost, log.id);
+    return { ok: true, data: object, charged: creditsCharged, source: "system", remaining };
+  } catch (err) {
+    console.error("System file analysis failed, refunding:", err);
+    await refundReservation(userId, reservation);
+    await db.insert(aiUsageLog).values({
+      userId,
+      providerAi: target.providerAi as never,
+      model: target.model,
+      source: "system_key",
+      creditsCharged: 0,
+      status: "failed",
+    });
+    return {
+      ok: false,
+      code: "analysis_failed",
+      error: err instanceof Error ? `El análisis falló: ${err.message}` : "El análisis del archivo falló.",
     };
   }
 }

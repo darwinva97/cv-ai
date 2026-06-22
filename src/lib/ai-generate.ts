@@ -139,6 +139,106 @@ function buildUserPrompt(input: GenerateInput): string {
     .join("\n");
 }
 
+// ---- Resume extraction from a file (image or PDF) ----
+
+const extractedBasicsSchema = z.object({
+  name: z.string().describe("Full name, empty string if not found"),
+  email: z.string(),
+  phone: z.string(),
+  location: z.string().describe("City, country"),
+  website: z.string(),
+  linkedin: z.string().describe("LinkedIn URL or username"),
+  github: z.string().describe("GitHub URL or username"),
+});
+
+const extractedWorkSchema = z.object({
+  company: z.string(),
+  position: z.string(),
+  startDate: z.string().describe("MM/YYYY or empty string"),
+  endDate: z.string().describe("MM/YYYY, 'Present', or empty string"),
+  description: z.string().describe("Role description / achievements"),
+});
+
+const extractedEducationSchema = z.object({
+  institution: z.string(),
+  degree: z.string().describe("Degree type, e.g. Bachelor"),
+  field: z.string().describe("Field of study"),
+  startDate: z.string(),
+  endDate: z.string(),
+  gpa: z.string().describe("GPA/score if present, else empty string"),
+});
+
+export const extractedResumeSchema = z.object({
+  basics: extractedBasicsSchema,
+  summary: z.string().describe("Professional summary, empty string if none"),
+  work: z.array(extractedWorkSchema),
+  education: z.array(extractedEducationSchema),
+  skills: z.array(z.string()).describe("Individual skill names"),
+});
+
+export type ExtractedResume = z.infer<typeof extractedResumeSchema>;
+
+export interface ExtractResult {
+  object: ExtractedResume;
+  usage: TokenUsage;
+}
+
+const EXTRACT_SYSTEM_PROMPT = `You are an expert resume parser. Extract the
+candidate's information from the provided resume (image or PDF) into the given
+structured schema. Never invent data: if a field is missing, return an empty
+string (or empty array). Keep the original language of the content. Preserve
+dates as written (prefer MM/YYYY). Extract every work and education entry.`;
+
+/**
+ * Extract structured resume data from a file (image or PDF) using a vision /
+ * document-capable model. `file.data` is base64 (no data: prefix).
+ */
+export async function extractResumeFromFile(input: {
+  provider: ProviderConfig;
+  file: { data: string; mediaType: string };
+}): Promise<ExtractResult> {
+  const model = resolveModel(input.provider);
+  const isPdf = input.file.mediaType === "application/pdf";
+
+  const filePart = isPdf
+    ? {
+        type: "file" as const,
+        data: input.file.data,
+        mediaType: input.file.mediaType,
+      }
+    : {
+        // Image part: pass a data URL so the media type is unambiguous.
+        type: "image" as const,
+        image: `data:${input.file.mediaType};base64,${input.file.data}`,
+      };
+
+  const { object, usage } = await generateObject({
+    model,
+    schema: extractedResumeSchema,
+    system: EXTRACT_SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: [
+          filePart,
+          { type: "text", text: "Extract this resume into the schema." },
+        ],
+      },
+    ],
+  });
+
+  return {
+    object,
+    usage: {
+      inputTokens: usage?.inputTokens ?? 0,
+      outputTokens: usage?.outputTokens ?? 0,
+      totalTokens:
+        usage?.totalTokens ??
+        (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
+    },
+  };
+}
+
 /**
  * Generate optimized resume content. Returns validated suggestions that the
  * caller can apply to the editor form (the user reviews and saves).

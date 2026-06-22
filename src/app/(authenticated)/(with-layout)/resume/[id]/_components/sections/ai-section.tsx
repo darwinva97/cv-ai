@@ -43,10 +43,10 @@ export function AISection({
         <div className="border rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-2">
             <Upload className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-medium">Importar desde imagen</h3>
+            <h3 className="text-sm font-medium">Importar desde imagen o PDF</h3>
           </div>
           <p className="text-xs text-muted-foreground">
-            Sube una captura de tu CV actual y extraeremos los datos automáticamente
+            Sube una captura o el PDF de tu CV actual y extraeremos los datos automáticamente
           </p>
           <ResumeScreenshotUpload onAnalysisComplete={onScreenshotAnalysis} />
         </div>
