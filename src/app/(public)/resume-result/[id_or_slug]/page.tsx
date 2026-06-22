@@ -10,7 +10,7 @@ import { getSessionUser } from "@/lib/auth-helpers";
 import { defaultStyleConfig } from "@/db/schema/style";
 import type { ResumeStyleConfig } from "@/db/schema/style";
 import type { Basics, Work, Education, Skill, Project, Language } from "@/types/resume";
-import { ResumePreview } from "@/components/resume-preview";
+import { ResumeSheet } from "@/components/resume-sheet";
 import { ResultActions } from "./_components/result-actions";
 
 // Cacheado por request: generateMetadata y el render comparten una sola lectura.
@@ -234,7 +234,7 @@ export default async function ResumeResultPage({
 
       {/* CV */}
       <div className="print-area container mx-auto max-w-4xl px-4 py-8">
-        <ResumePreview
+        <ResumeSheet
           config={styleConfig}
           basics={basics}
           work={work}

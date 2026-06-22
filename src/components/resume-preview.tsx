@@ -11,6 +11,8 @@ interface ResumePreviewProps {
   skills?: Skill[];
   projects?: Project[];
   languages?: Language[];
+  /** Fill the container width and drop the built-in maxWidth/shadow (used inside a page sheet). */
+  fullWidth?: boolean;
 }
 
 export function ResumePreview({
@@ -21,8 +23,16 @@ export function ResumePreview({
   skills = [],
   projects = [],
   languages = [],
+  fullWidth = false,
 }: ResumePreviewProps) {
   const { colors, typography, spacing, layout, sections, extras } = config;
+  const containerMaxWidth = fullWidth ? "100%" : `${layout.maxWidth}px`;
+  const containerShadow = fullWidth
+    ? "none"
+    : extras.shadowLevel !== "none"
+      ? "0 2px 12px rgba(0, 0, 0, 0.08)"
+      : "none";
+  const containerRadius = fullWidth ? "0" : `${extras.borderRadius}px`;
 
   // Format date helper
   const formatDate = (date?: string) => {
@@ -428,13 +438,13 @@ export function ResumePreview({
       <div
         style={{
           display: "flex",
-          maxWidth: `${layout.maxWidth}px`,
+          maxWidth: containerMaxWidth,
           margin: "0 auto",
           fontFamily: typography.bodyFont,
           backgroundColor: colors.background,
-          borderRadius: `${extras.borderRadius}px`,
+          borderRadius: containerRadius,
           overflow: "hidden",
-          boxShadow: extras.shadowLevel !== "none" ? "0 2px 12px rgba(0, 0, 0, 0.08)" : "none",
+          boxShadow: containerShadow,
         }}
       >
         {isLeftSidebar ? (
@@ -458,13 +468,13 @@ export function ResumePreview({
   return (
     <div
       style={{
-        maxWidth: `${layout.maxWidth}px`,
+        maxWidth: containerMaxWidth,
         margin: "0 auto",
         padding: `${spacing.pagePadding}px`,
         backgroundColor: colors.background,
         fontFamily: typography.bodyFont,
-        borderRadius: `${extras.borderRadius}px`,
-        boxShadow: extras.shadowLevel !== "none" ? "0 2px 12px rgba(0, 0, 0, 0.08)" : "none",
+        borderRadius: containerRadius,
+        boxShadow: containerShadow,
       }}
     >
       {/* Header - Centered, prominent name */}

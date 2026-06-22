@@ -3,7 +3,7 @@
 import { Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ResumePreview } from "@/components/resume-preview";
+import { ResumeSheet } from "@/components/resume-sheet";
 import type { ResumeStyleConfig } from "@/db/schema/style";
 import type { Basics, Work, Education, Skill } from "@/types/resume";
 
@@ -38,20 +38,15 @@ export function PreviewPanel({
         </div>
         <ScrollArea className="flex-1">
           <div className="p-4">
-            <div
-              className="bg-white rounded-lg shadow-sm"
-              style={{ transform: "scale(0.75)", transformOrigin: "top center" }}
-            >
-              <ResumePreview
-                config={currentStyleConfig}
-                basics={basics}
-                work={workExperiences}
-                education={educations}
-                skills={skills}
-                projects={[]}
-                languages={[]}
-              />
-            </div>
+            <ResumeSheet
+              config={currentStyleConfig}
+              basics={basics}
+              work={workExperiences}
+              education={educations}
+              skills={skills}
+              projects={[]}
+              languages={[]}
+            />
           </div>
         </ScrollArea>
       </div>
