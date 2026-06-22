@@ -95,6 +95,29 @@ export function BasicsSection({
           isEditMode={isEditingMode}
         />
 
+        <div className="flex items-end gap-3">
+          {basics.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={basics.image}
+              alt="Foto de perfil"
+              className="h-12 w-12 rounded-full object-cover border shrink-0"
+            />
+          ) : (
+            <div className="h-12 w-12 rounded-full border bg-muted shrink-0" />
+          )}
+          <div className="flex-1">
+            <EditableField
+              label="Foto de perfil (URL)"
+              type="url"
+              value={basics.image || ""}
+              onChange={(value) => updateField("image", value)}
+              isEditMode={isEditingMode}
+              placeholder="https://… (imagen cuadrada)"
+            />
+          </div>
+        </div>
+
         <EditableField
           label="Resumen profesional"
           type="textarea"

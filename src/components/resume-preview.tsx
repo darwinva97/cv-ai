@@ -277,6 +277,22 @@ export function ResumePreview({
           paddingBottom: "16px",
           borderBottom: `2px solid ${colors.primary}`,
         }}>
+          {basics.image && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={basics.image}
+              alt={basics.name || "Foto de perfil"}
+              style={{
+                width: "92px",
+                height: "92px",
+                borderRadius: "50%",
+                objectFit: "cover",
+                margin: "0 auto 12px",
+                border: `3px solid ${colors.primary}`,
+                display: "block",
+              }}
+            />
+          )}
           <h1 style={{
             fontFamily: typography.headingFont,
             fontSize: `${typography.headingSizes.h1 + 12}px`,
@@ -458,6 +474,22 @@ export function ResumePreview({
         paddingBottom: "20px",
         borderBottom: `2px solid ${colors.primary}`,
       }}>
+        {basics.image && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={basics.image}
+            alt={basics.name || "Foto de perfil"}
+            style={{
+              width: "108px",
+              height: "108px",
+              borderRadius: "50%",
+              objectFit: "cover",
+              margin: "0 auto 14px",
+              border: `3px solid ${colors.primary}`,
+              display: "block",
+            }}
+          />
+        )}
         <h1 style={{
           fontFamily: typography.headingFont,
           fontSize: `${typography.headingSizes.h1 + 16}px`,
