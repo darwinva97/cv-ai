@@ -55,6 +55,7 @@ export default function ResumeEditorPage() {
         isEditingMode={editor.isEditingMode}
         isSaving={editor.isSaving}
         showPreview={editor.showPreview}
+        isResultPublic={editor.isResultPublic}
         onVersionChange={editor.setCurrentVersionId}
         onStartEdit={editor.handleStartEdit}
         onStartCreate={editor.handleStartCreate}
@@ -65,6 +66,7 @@ export default function ResumeEditorPage() {
         }
         onCancel={editor.handleCancelEdit}
         onTogglePreview={() => editor.setShowPreview(!editor.showPreview)}
+        onDelete={editor.handleDeleteResume}
       />
 
       <div className="flex-1 flex overflow-hidden">

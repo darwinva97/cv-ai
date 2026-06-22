@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { resume, resumeVersion } from "@/db/schema/resume";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 
 export async function getResumes(userId: string) {
   const resumes = await db.query.resume.findMany({
@@ -383,4 +383,182 @@ export async function createVersionBasics(versionId: string, data: {
     });
 
   return newBasics;
+}
+
+// ============= VERSION DATA (work / education / skills) =============
+// Estas secciones no se guardaban: solo se persistía `basics`, por lo que el
+// CV público (que lee de la BD) salía vacío. saveVersionData reemplaza por
+// completo las filas de cada sección para la versión dada.
+
+type WorkInput = {
+  name?: string;
+  position?: string;
+  url?: string;
+  startDate?: string;
+  endDate?: string;
+  summary?: string;
+  highlights?: string[];
+  pinnedFields?: string[];
+  aiModifiedFields?: string[];
+};
+
+type EducationInput = {
+  institution?: string;
+  url?: string;
+  area?: string;
+  studyType?: string;
+  startDate?: string;
+  endDate?: string;
+  score?: string;
+  courses?: string[];
+  pinnedFields?: string[];
+  aiModifiedFields?: string[];
+};
+
+type SkillInput = {
+  name?: string;
+  level?: string;
+  keywords?: string[];
+  pinnedFields?: string[];
+  aiModifiedFields?: string[];
+};
+
+export async function saveVersionData(
+  versionId: string,
+  data: {
+    work?: WorkInput[];
+    education?: EducationInput[];
+    skills?: SkillInput[];
+  }
+) {
+  const {
+    resumeWork,
+    resumeVersionWork,
+    resumeEducation,
+    resumeVersionEducation,
+    resumeSkill,
+    resumeVersionSkill,
+  } = await import("@/db/schema/resume");
+
+  // WORK
+  if (data.work) {
+    const existing = await db
+      .select({ id: resumeVersionWork.resumeWorkId })
+      .from(resumeVersionWork)
+      .where(eq(resumeVersionWork.resumeVersionId, versionId));
+    if (existing.length) {
+      // Borrar la entidad cascadea el borrado de la fila de unión.
+      await db.delete(resumeWork).where(inArray(resumeWork.id, existing.map((e) => e.id)));
+    }
+    for (const w of data.work) {
+      const [row] = await db
+        .insert(resumeWork)
+        .values({
+          name: w.name,
+          position: w.position,
+          url: w.url,
+          startDate: w.startDate,
+          endDate: w.endDate,
+          summary: w.summary,
+          highlights: w.highlights ?? [],
+          pinnedFields: w.pinnedFields ?? [],
+          aiModifiedFields: w.aiModifiedFields ?? [],
+        })
+        .returning();
+      await db.insert(resumeVersionWork).values({
+        resumeVersionId: versionId,
+        resumeWorkId: row.id,
+      });
+    }
+  }
+
+  // EDUCATION
+  if (data.education) {
+    const existing = await db
+      .select({ id: resumeVersionEducation.resumeEducationId })
+      .from(resumeVersionEducation)
+      .where(eq(resumeVersionEducation.resumeVersionId, versionId));
+    if (existing.length) {
+      await db
+        .delete(resumeEducation)
+        .where(inArray(resumeEducation.id, existing.map((e) => e.id)));
+    }
+    for (const e of data.education) {
+      const [row] = await db
+        .insert(resumeEducation)
+        .values({
+          institution: e.institution,
+          url: e.url,
+          area: e.area,
+          studyType: e.studyType,
+          startDate: e.startDate,
+          endDate: e.endDate,
+          score: e.score,
+          courses: e.courses ?? [],
+          pinnedFields: e.pinnedFields ?? [],
+          aiModifiedFields: e.aiModifiedFields ?? [],
+        })
+        .returning();
+      await db.insert(resumeVersionEducation).values({
+        resumeVersionId: versionId,
+        resumeEducationId: row.id,
+      });
+    }
+  }
+
+  // SKILLS
+  if (data.skills) {
+    const existing = await db
+      .select({ id: resumeVersionSkill.resumeSkillId })
+      .from(resumeVersionSkill)
+      .where(eq(resumeVersionSkill.resumeVersionId, versionId));
+    if (existing.length) {
+      await db.delete(resumeSkill).where(inArray(resumeSkill.id, existing.map((e) => e.id)));
+    }
+    for (const s of data.skills) {
+      const [row] = await db
+        .insert(resumeSkill)
+        .values({
+          name: s.name,
+          level: s.level,
+          keywords: s.keywords ?? [],
+          pinnedFields: s.pinnedFields ?? [],
+          aiModifiedFields: s.aiModifiedFields ?? [],
+        })
+        .returning();
+      await db.insert(resumeVersionSkill).values({
+        resumeVersionId: versionId,
+        resumeSkillId: row.id,
+      });
+    }
+  }
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resuelve un CV para la vista pública por id (uuid) o slug, y devuelve la
+ * versión "actual" (currentVersionId, o la primera disponible) con sus datos.
+ * No aplica gating de visibilidad — eso lo decide la página con la sesión.
+ */
+export async function getPublicResume(idOrSlug: string) {
+  const theResume = UUID_RE.test(idOrSlug)
+    ? await getResume(idOrSlug)
+    : await getResumeBySlug(idOrSlug);
+
+  if (!theResume) return null;
+
+  const versions = await getResumeVersions(theResume.id);
+  const versionId = theResume.currentVersionId || versions[0]?.id;
+  if (!versionId) {
+    return { resume: theResume, version: null, data: null };
+  }
+
+  const [version, data] = await Promise.all([
+    getResumeVersion(versionId),
+    getVersionData(versionId),
+  ]);
+
+  return { resume: theResume, version, data };
 }

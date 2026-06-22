@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { ResumeStyleConfig } from "@/db/schema/style";
 import { defaultStyleConfig } from "@/db/schema/style";
@@ -15,6 +16,8 @@ import {
   updateResumeVersion,
   updateVersionBasics,
   createVersionBasics,
+  saveVersionData,
+  deleteResume,
 } from "@/actions/resume";
 import { generateVersionContent } from "@/actions/ai";
 
@@ -34,6 +37,8 @@ const initialBasics: Basics = {
 };
 
 export function useResumeEditor(resumeId: string) {
+  const router = useRouter();
+
   // Loading states
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -99,6 +104,47 @@ export function useResumeEditor(resumeId: string) {
           aiModifiedFields: versionData.basics.aiModifiedFields || [],
         });
       }
+
+      // Cargar el resto de secciones persistidas (antes solo se cargaba basics).
+      setWorkExperiences(
+        (versionData.work || []).map((w) => ({
+          id: w.id,
+          name: w.name || "",
+          position: w.position || "",
+          url: w.url || "",
+          startDate: w.startDate || "",
+          endDate: w.endDate || "",
+          summary: w.summary || "",
+          highlights: w.highlights || [],
+          pinnedFields: w.pinnedFields || [],
+          aiModifiedFields: w.aiModifiedFields || [],
+        }))
+      );
+      setEducations(
+        (versionData.education || []).map((e) => ({
+          id: e.id,
+          institution: e.institution || "",
+          url: e.url || "",
+          area: e.area || "",
+          studyType: e.studyType || "",
+          startDate: e.startDate || "",
+          endDate: e.endDate || "",
+          score: e.score || "",
+          courses: e.courses || [],
+          pinnedFields: e.pinnedFields || [],
+          aiModifiedFields: e.aiModifiedFields || [],
+        }))
+      );
+      setSkills(
+        (versionData.skills || []).map((s) => ({
+          id: s.id,
+          name: s.name || "",
+          level: s.level || "",
+          keywords: s.keywords || [],
+          pinnedFields: s.pinnedFields || [],
+          aiModifiedFields: s.aiModifiedFields || [],
+        }))
+      );
     } catch (error) {
       console.error("Error loading version data:", error);
     }
@@ -150,9 +196,16 @@ export function useResumeEditor(resumeId: string) {
         isCommunityPublic,
       });
       if (basicsId) await updateVersionBasics(basicsId, basics);
+      await saveVersionData(currentVersionId, {
+        work: workExperiences,
+        education: educations,
+        skills,
+      });
       setEditMode("none");
+      toast.success("CV guardado");
     } catch (error) {
       console.error("Error saving:", error);
+      toast.error("No se pudo guardar el CV");
     } finally {
       setIsSaving(false);
     }
@@ -172,6 +225,11 @@ export function useResumeEditor(resumeId: string) {
       });
       const newBasics = await createVersionBasics(newVersion.id, basics);
       setBasicsId(newBasics.id);
+      await saveVersionData(newVersion.id, {
+        work: workExperiences,
+        education: educations,
+        skills,
+      });
       const versionsData = await getResumeVersions(resumeId);
       setVersions(versionsData);
       setCurrentVersionId(newVersion.id);
@@ -195,6 +253,17 @@ export function useResumeEditor(resumeId: string) {
     setAiPrompt("");
     setJobOffer("");
     setEditMode("create");
+  };
+
+  const handleDeleteResume = async () => {
+    try {
+      await deleteResume(resumeId);
+      toast.success("CV eliminado");
+      router.push("/resumes");
+    } catch (error) {
+      console.error("Error deleting resume:", error);
+      toast.error("No se pudo eliminar el CV");
+    }
   };
 
   const handleStyleSelect = (styleId: string, config: ResumeStyleConfig) => {
@@ -496,6 +565,7 @@ export function useResumeEditor(resumeId: string) {
     handleStyleSelect,
     handleScreenshotAnalysis,
     handleGenerate,
+    handleDeleteResume,
 
     // Field helpers
     toggleFieldPin,

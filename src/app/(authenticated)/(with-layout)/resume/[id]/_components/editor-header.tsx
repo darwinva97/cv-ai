@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   Download,
@@ -34,7 +35,7 @@ import { Separator } from "@/components/ui/separator";
 import type { EditMode } from "../_hooks/use-resume-editor";
 
 interface EditorHeaderProps {
-  resume: { title: string };
+  resume: { id: string; title: string };
   versionTitle: string;
   versions: any[];
   currentVersionId: string;
@@ -42,12 +43,14 @@ interface EditorHeaderProps {
   isEditingMode: boolean;
   isSaving: boolean;
   showPreview: boolean;
+  isResultPublic: boolean;
   onVersionChange: (versionId: string) => void;
   onStartEdit: () => void;
   onStartCreate: () => void;
   onSave: () => void;
   onCancel: () => void;
   onTogglePreview: () => void;
+  onDelete: () => void;
 }
 
 export function EditorHeader({
@@ -59,13 +62,49 @@ export function EditorHeader({
   isEditingMode,
   isSaving,
   showPreview,
+  isResultPublic,
   onVersionChange,
   onStartEdit,
   onStartCreate,
   onSave,
   onCancel,
   onTogglePreview,
+  onDelete,
 }: EditorHeaderProps) {
+  const publicUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/resume-result/${resume.id}`
+      : "";
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      toast.success(
+        isResultPublic
+          ? "Link público copiado al portapapeles"
+          : "Link copiado. Activa \"CV público\" en Ajustes para que otros puedan verlo."
+      );
+    } catch {
+      toast.error("No se pudo copiar el link");
+    }
+  };
+
+  const handleExportPdf = () => {
+    // Reutiliza la página pública con auto-impresión (?print=1). El dueño
+    // siempre puede verla aunque el CV no sea público.
+    window.open(`/resume-result/${resume.id}?print=1`, "_blank");
+  };
+
+  const handleDelete = () => {
+    if (
+      window.confirm(
+        "¿Eliminar este CV y todas sus versiones? Esta acción no se puede deshacer."
+      )
+    ) {
+      onDelete();
+    }
+  };
+
   return (
     <header className="flex-shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center justify-between h-14 px-4">
@@ -175,16 +214,19 @@ export function EditorHeader({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPdf}>
                 <Download className="h-4 w-4 mr-2" />
                 Exportar PDF
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={handleShare}>
                 <Share2 className="h-4 w-4 mr-2" />
                 Compartir
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={handleDelete}
+              >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Eliminar CV
               </DropdownMenuItem>
