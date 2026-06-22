@@ -22,10 +22,14 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "https://cv-ai.bezenti.com"
+  ),
   title: {
     default: "CV AI - Crea tu CV perfecto con inteligencia artificial",
     template: "%s | CV AI",
   },
+  robots: { index: true, follow: true },
   description:
     "Genera currículums profesionales personalizados para cada oferta de trabajo usando inteligencia artificial. Destaca entre los demás candidatos con CV AI.",
   keywords: [

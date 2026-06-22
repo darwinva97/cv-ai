@@ -1,3 +1,5 @@
+import { cache } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Lock } from "lucide-react";
@@ -11,6 +13,47 @@ import type { Basics, Work, Education, Skill, Project, Language } from "@/types/
 import { ResumePreview } from "@/components/resume-preview";
 import { ResultActions } from "./_components/result-actions";
 
+// Cacheado por request: generateMetadata y el render comparten una sola lectura.
+const getResumeData = cache((idOrSlug: string) => getPublicResume(idOrSlug));
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id_or_slug: string }>;
+}): Promise<Metadata> {
+  const { id_or_slug } = await params;
+  const result = await getResumeData(id_or_slug);
+  if (!result) return { title: "CV no encontrado", robots: { index: false, follow: false } };
+
+  const { resume, version, data } = result;
+  const isPublic = version?.isResultPublic ?? false;
+  const name = data?.basics?.name || resume.title || "CV";
+  const label = data?.basics?.label || "";
+  const summary =
+    data?.basics?.summary || `Currículum profesional de ${name} creado con CV AI.`;
+  const title = label ? `${name} — ${label}` : name;
+  const description = summary.length > 160 ? `${summary.slice(0, 157)}…` : summary;
+  const canonicalPath = `/resume-result/${resume.slug || resume.id}`;
+
+  return {
+    title,
+    description,
+    // Solo indexar CVs públicos; los privados quedan fuera de buscadores.
+    robots: isPublic
+      ? { index: true, follow: true }
+      : { index: false, follow: false },
+    alternates: { canonical: canonicalPath },
+    openGraph: {
+      type: "profile",
+      title,
+      description,
+      url: canonicalPath,
+      siteName: "CV AI",
+    },
+    twitter: { card: "summary", title, description },
+  };
+}
+
 export default async function ResumeResultPage({
   params,
   searchParams,
@@ -21,7 +64,7 @@ export default async function ResumeResultPage({
   const { id_or_slug } = await params;
   const { print } = await searchParams;
 
-  const result = await getPublicResume(id_or_slug);
+  const result = await getResumeData(id_or_slug);
   if (!result) notFound();
 
   const { resume, version, data } = result;
@@ -66,6 +109,7 @@ export default async function ResumeResultPage({
     email: b?.email || "",
     phone: b?.phone || "",
     url: b?.url || "",
+    image: b?.image || undefined,
     summary: b?.summary || "",
     location: b?.location || { city: "", countryCode: "", region: "" },
   };
@@ -117,8 +161,53 @@ export default async function ResumeResultPage({
     keywords: p.keywords || [],
   }));
 
+  // Microdatos schema.org (Person) — solo se emiten para CVs públicos, que son
+  // los indexables. Ayuda a buscadores a entender el perfil.
+  const sameAs = [
+    ...(data?.profiles || []).map((p) => p.url).filter((u): u is string => !!u),
+    basics.url,
+  ].filter(Boolean);
+
+  const personLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: basics.name,
+    ...(basics.label && { jobTitle: basics.label }),
+    ...(basics.summary && { description: basics.summary }),
+    ...(basics.email && { email: basics.email }),
+    ...(basics.phone && { telephone: basics.phone }),
+    ...(basics.url && { url: basics.url }),
+    ...(basics.location?.city && {
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: basics.location.city,
+        ...(basics.location.countryCode && {
+          addressCountry: basics.location.countryCode,
+        }),
+      },
+    }),
+    ...(skills.length && { knowsAbout: skills.map((s) => s.name).filter(Boolean) }),
+    ...(work[0]?.name && {
+      worksFor: { "@type": "Organization", name: work[0].name },
+    }),
+    ...(education[0]?.institution && {
+      alumniOf: {
+        "@type": "EducationalOrganization",
+        name: education[0].institution,
+      },
+    }),
+    ...(sameAs.length && { sameAs }),
+  };
+
   return (
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900">
+      {isPublic && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(personLd) }}
+        />
+      )}
+
       {/* Reglas de impresión: al imprimir/guardar como PDF solo queda el CV. */}
       <style>{`
         @media print {

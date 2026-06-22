@@ -10,7 +10,15 @@ export async function proxy(request: NextRequest) {
   // Public routes that don't require authentication.
   // /privacy and /terms must be reachable without login (required by Google's
   // OAuth consent screen and for general legal accessibility).
-  const publicRoutes = ["/", "/login", "/resume-result", "/privacy", "/terms"];
+  const publicRoutes = [
+    "/",
+    "/login",
+    "/resume-result",
+    "/privacy",
+    "/terms",
+    "/robots.txt",
+    "/sitemap.xml",
+  ];
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route || pathname.startsWith("/resume-result/")
   );
