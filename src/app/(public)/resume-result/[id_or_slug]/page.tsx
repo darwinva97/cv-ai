@@ -50,7 +50,7 @@ export async function generateMetadata({
       url: canonicalPath,
       siteName: "CV AI",
     },
-    twitter: { card: "summary", title, description },
+    twitter: { card: "summary_large_image", title, description },
   };
 }
 
