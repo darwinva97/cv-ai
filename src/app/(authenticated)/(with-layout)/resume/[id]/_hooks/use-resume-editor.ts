@@ -20,6 +20,8 @@ import {
   deleteResume,
 } from "@/actions/resume";
 import { generateVersionContent } from "@/actions/ai";
+import { getVersionStyle, persistVersionStyle } from "@/actions/style";
+import { getTemplateById, resumeTemplates } from "@/lib/resume-templates";
 
 export type EditMode = "none" | "edit" | "create";
 export type ActiveSection = "basics" | "work" | "education" | "skills" | "settings" | "ai";
@@ -147,6 +149,21 @@ export function useResumeEditor(resumeId: string) {
           aiModifiedFields: s.aiModifiedFields || [],
         }))
       );
+
+      // Cargar el estilo persistido de la versión (si existe).
+      try {
+        const versionStyle = await getVersionStyle(versionId);
+        if (versionStyle?.style?.config) {
+          setCurrentStyleConfig({
+            ...versionStyle.style.config,
+            ...(versionStyle.overrides ?? {}),
+          });
+          const tpl = resumeTemplates.find((t) => t.name === versionStyle.style.name);
+          if (tpl) setCurrentStyleId(tpl.id);
+        }
+      } catch {
+        // Estilos no disponibles: se usa el estilo por defecto.
+      }
     } catch (error) {
       console.error("Error loading version data:", error);
     }
@@ -203,6 +220,10 @@ export function useResumeEditor(resumeId: string) {
         education: educations,
         skills,
       });
+      if (currentStyleId) {
+        const tplName = getTemplateById(currentStyleId)?.name || "Estilo";
+        await persistVersionStyle(currentVersionId, currentStyleId, tplName, currentStyleConfig);
+      }
       setEditMode("none");
       toast.success("CV guardado");
     } catch (error) {
@@ -232,6 +253,10 @@ export function useResumeEditor(resumeId: string) {
         education: educations,
         skills,
       });
+      if (currentStyleId) {
+        const tplName = getTemplateById(currentStyleId)?.name || "Estilo";
+        await persistVersionStyle(newVersion.id, currentStyleId, tplName, currentStyleConfig);
+      }
       const versionsData = await getResumeVersions(resumeId);
       setVersions(versionsData);
       setCurrentVersionId(newVersion.id);

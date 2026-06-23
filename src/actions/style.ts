@@ -10,6 +10,7 @@ import {
   type ResumeStyleConfig,
 } from "@/db/schema/style";
 import { eq, and, desc, sql, or, ilike } from "drizzle-orm";
+import { getSessionUser } from "@/lib/auth-helpers";
 
 export async function getStyles(options?: {
   userId?: string;
@@ -285,6 +286,56 @@ export async function applyStyleToVersion(
     .update(resumeStyle)
     .set({ usageCount: sql`${resumeStyle.usageCount} + 1` })
     .where(eq(resumeStyle.id, styleId));
+}
+
+/**
+ * Persiste el estilo elegido (plantilla + config, con posibles personalizaciones)
+ * para una versión de CV. find-or-create de un resume_style por (templateId,
+ * usuario) y enlace en resume_version_style, para que la vista pública/exportada
+ * refleje el diseño. Devuelve { ok } y nunca lanza al llamador.
+ */
+export async function persistVersionStyle(
+  versionId: string,
+  templateId: string,
+  name: string,
+  config: ResumeStyleConfig
+): Promise<{ ok: boolean }> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { ok: false };
+
+    const slug = `tpl-${templateId}-${user.id}`;
+    const existing = await db
+      .select()
+      .from(resumeStyle)
+      .where(eq(resumeStyle.slug, slug))
+      .limit(1);
+
+    let styleId: string;
+    if (existing.length) {
+      styleId = existing[0].id;
+      await db.update(resumeStyle).set({ config }).where(eq(resumeStyle.id, styleId));
+    } else {
+      const [created] = await db
+        .insert(resumeStyle)
+        .values({ name, slug, userId: user.id, config, isPublic: false, isOfficial: false })
+        .returning();
+      styleId = created.id;
+    }
+
+    await db
+      .delete(resumeVersionStyle)
+      .where(eq(resumeVersionStyle.resumeVersionId, versionId));
+    await db
+      .insert(resumeVersionStyle)
+      .values({ resumeVersionId: versionId, styleId, configOverrides: null });
+
+    return { ok: true };
+  } catch (err) {
+    // Degrada con gracia si las tablas de estilos no están disponibles.
+    console.error("persistVersionStyle failed:", err);
+    return { ok: false };
+  }
 }
 
 export async function getVersionStyle(resumeVersionId: string) {
