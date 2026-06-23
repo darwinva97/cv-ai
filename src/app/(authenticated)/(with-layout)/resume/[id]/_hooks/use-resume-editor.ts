@@ -70,6 +70,7 @@ export function useResumeEditor(resumeId: string) {
   const [versionTitle, setVersionTitle] = useState("Versión 1");
   const [aiPrompt, setAiPrompt] = useState("");
   const [jobOffer, setJobOffer] = useState("");
+  const [creativity, setCreativity] = useState(3); // 1-10: cuánto optimizar/inventar
 
   // Settings
   const [isResultPublic, setIsResultPublic] = useState(false);
@@ -366,6 +367,7 @@ export function useResumeEditor(resumeId: string) {
       const result = await generateVersionContent(currentVersionId, {
         prompt: aiPrompt.trim() || undefined,
         jobOffer: jobOffer.trim() || undefined,
+        creativity,
       });
 
       if (!result.ok) {
@@ -565,6 +567,7 @@ export function useResumeEditor(resumeId: string) {
     versionTitle,
     aiPrompt,
     jobOffer,
+    creativity,
     isResultPublic,
     isCommunityPublic,
     currentStyleId,
@@ -579,6 +582,7 @@ export function useResumeEditor(resumeId: string) {
     setVersionTitle,
     setAiPrompt,
     setJobOffer,
+    setCreativity,
     setIsResultPublic,
     setIsCommunityPublic,
     setCurrentStyleConfig,

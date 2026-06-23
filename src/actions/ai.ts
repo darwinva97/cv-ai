@@ -7,7 +7,8 @@ import { aiUsageLog } from "@/db/schema/billing";
 import { systemAiKey } from "@/db/schema/system-key";
 import { eq, and, desc, asc, or, isNull, lte } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getVersionData } from "@/actions/resume";
+import { getVersionData, getResumeVersion } from "@/actions/resume";
+import { fetchJobOfferText } from "@/lib/fetch-job-offer";
 import {
   generateResumeContent,
   extractResumeFromFile,
@@ -192,7 +193,7 @@ async function getDefaultSystemTarget(): Promise<{ providerAi: string; model: st
  */
 export async function generateVersionContent(
   versionId: string,
-  opts: { prompt?: string; jobOffer?: string }
+  opts: { prompt?: string; jobOffer?: string; creativity?: number }
 ): Promise<GenerateResultPayload> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
@@ -200,8 +201,21 @@ export async function generateVersionContent(
   }
   const userId = session.user.id;
 
-  const current = await getVersionData(versionId);
-  const parts = buildGenerateParts(current, opts);
+  const [current, version] = await Promise.all([
+    getVersionData(versionId),
+    getResumeVersion(versionId),
+  ]);
+
+  // Oferta efectiva: texto pegado, o el texto descargado desde la URL guardada.
+  const jobOffer =
+    opts.jobOffer?.trim() ||
+    version?.jobOfferText?.trim() ||
+    (version?.jobOfferLink
+      ? (await fetchJobOfferText(version.jobOfferLink)) ?? undefined
+      : undefined);
+
+  const parts = buildGenerateParts(current, { prompt: opts.prompt, jobOffer });
+  parts.creativity = opts.creativity;
 
   // ---- BYOK: user's own active key → free, no credits ----
   const ownKey = await getActiveAIProvider(userId);

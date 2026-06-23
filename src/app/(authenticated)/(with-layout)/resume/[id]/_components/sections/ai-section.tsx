@@ -5,6 +5,7 @@ import { Upload, Sparkles, Loader2, Coins, CreditCard, KeyRound } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { ResumeScreenshotUpload } from "@/components/resume-screenshot-upload";
 import type { ParsedResumeData } from "@/lib/ai-resume-analyzer";
@@ -12,8 +13,10 @@ import type { ParsedResumeData } from "@/lib/ai-resume-analyzer";
 interface AISectionProps {
   aiPrompt: string;
   jobOffer: string;
+  creativity: number;
   onAiPromptChange: (value: string) => void;
   onJobOfferChange: (value: string) => void;
+  onCreativityChange: (value: number) => void;
   onScreenshotAnalysis: (data: ParsedResumeData) => void;
   onGenerate: () => void;
   isGenerating: boolean;
@@ -21,11 +24,19 @@ interface AISectionProps {
   onDismissCreditNotice?: () => void;
 }
 
+const creativityLabel = (n: number): string => {
+  if (n <= 3) return "Conservador · no inventa nada";
+  if (n <= 7) return "Equilibrado · refuerza sin inventar datos clave";
+  return "Creativo · puede embellecer y extrapolar";
+};
+
 export function AISection({
   aiPrompt,
   jobOffer,
+  creativity,
   onAiPromptChange,
   onJobOfferChange,
+  onCreativityChange,
   onScreenshotAnalysis,
   onGenerate,
   isGenerating,
@@ -79,6 +90,21 @@ export function AISection({
               rows={4}
               className="text-sm"
             />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Nivel de optimización</Label>
+              <span className="text-xs font-medium text-primary">{creativity}/10</span>
+            </div>
+            <Slider
+              value={[creativity]}
+              onValueChange={([v]) => onCreativityChange(v)}
+              min={1}
+              max={10}
+              step={1}
+            />
+            <p className="text-xs text-muted-foreground">{creativityLabel(creativity)}</p>
           </div>
 
           <Button

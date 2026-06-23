@@ -138,8 +138,10 @@ export default function ResumeEditorPage() {
                 <AISection
                   aiPrompt={editor.aiPrompt}
                   jobOffer={editor.jobOffer}
+                  creativity={editor.creativity}
                   onAiPromptChange={editor.setAiPrompt}
                   onJobOfferChange={editor.setJobOffer}
+                  onCreativityChange={editor.setCreativity}
                   onScreenshotAnalysis={editor.handleScreenshotAnalysis}
                   onGenerate={editor.handleGenerate}
                   isGenerating={editor.isGenerating}
