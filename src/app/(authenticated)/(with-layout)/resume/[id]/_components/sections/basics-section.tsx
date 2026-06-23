@@ -1,7 +1,12 @@
 "use client";
 
+import { useRef, useState } from "react";
+import { Upload, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { EditableField } from "@/components/editable-field";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { uploadProfilePhoto } from "@/actions/upload";
 import type { Basics } from "@/types/resume";
 
 interface BasicsSectionProps {
@@ -21,8 +26,33 @@ export function BasicsSection({
   isFieldAiModified,
   toggleFieldPin,
 }: BasicsSectionProps) {
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
   const updateField = (field: string, value: string) => {
     onBasicsChange({ ...basics, [field]: value });
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await uploadProfilePhoto(fd);
+      if (res.ok) {
+        updateField("image", res.url);
+        toast.success("Foto subida");
+      } else {
+        toast.error(res.error);
+      }
+    } catch {
+      toast.error("No se pudo subir la foto");
+    } finally {
+      setUploading(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
   };
 
   const updateLocation = (field: string, value: string) => {
@@ -113,9 +143,35 @@ export function BasicsSection({
               value={basics.image || ""}
               onChange={(value) => updateField("image", value)}
               isEditMode={isEditingMode}
-              placeholder="https://… (imagen cuadrada)"
+              placeholder="https://… o sube una imagen"
             />
           </div>
+          {isEditingMode && (
+            <>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={handlePhotoUpload}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0"
+                disabled={uploading}
+                onClick={() => photoInputRef.current?.click()}
+              >
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                <span className="ml-1">Subir</span>
+              </Button>
+            </>
+          )}
         </div>
 
         <EditableField
