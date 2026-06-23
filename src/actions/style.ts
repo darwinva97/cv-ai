@@ -5,12 +5,15 @@ import {
   resumeStyle,
   resumeStyleLike,
   resumeStyleSaved,
+  resumeStyleReport,
   resumeVersionStyle,
   defaultStyleConfig,
   type ResumeStyleConfig,
 } from "@/db/schema/style";
 import { eq, and, desc, sql, or, ilike } from "drizzle-orm";
+import { randomBytes } from "crypto";
 import { getSessionUser } from "@/lib/auth-helpers";
+import { getTemplateById } from "@/lib/resume-templates";
 
 export async function getStyles(options?: {
   userId?: string;
@@ -370,4 +373,175 @@ export async function getOfficialStyles() {
     .from(resumeStyle)
     .where(eq(resumeStyle.isOfficial, true))
     .orderBy(resumeStyle.name);
+}
+
+// ============================================
+// Acciones de comunidad con sesión (like / guardar / fork / reportar / crear).
+// El cliente nunca pasa userId: se resuelve de la sesión en el servidor.
+// ============================================
+
+type StyleCategory =
+  | "minimal" | "modern" | "classic" | "creative" | "professional" | "tech" | "academic" | "other";
+
+export interface StyleActionResult {
+  ok: boolean;
+  liked?: boolean;
+  saved?: boolean;
+  id?: string;
+  error?: string;
+}
+
+function slugify(name: string): string {
+  const base =
+    name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "") // quita diacríticos
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "estilo";
+  return `${base}-${randomBytes(3).toString("hex")}`;
+}
+
+export async function hasUserSavedStyle(styleId: string, userId: string) {
+  const saved = await db.query.resumeStyleSaved.findFirst({
+    where: and(eq(resumeStyleSaved.styleId, styleId), eq(resumeStyleSaved.userId, userId)),
+  });
+  return !!saved;
+}
+
+export async function toggleLikeStyle(styleId: string): Promise<StyleActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Inicia sesión para dar like." };
+  const liked = await hasUserLikedStyle(styleId, user.id);
+  if (liked) await unlikeStyle(styleId, user.id);
+  else await likeStyle(styleId, user.id);
+  return { ok: true, liked: !liked };
+}
+
+export async function toggleSaveStyle(styleId: string): Promise<StyleActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Inicia sesión para guardar." };
+  const saved = await hasUserSavedStyle(styleId, user.id);
+  if (saved) await unsaveStyle(styleId, user.id);
+  else await saveStyle(styleId, user.id);
+  return { ok: true, saved: !saved };
+}
+
+export async function forkStyleAsMine(styleId: string): Promise<StyleActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Inicia sesión para forkear." };
+  try {
+    const fork = await forkStyle(styleId, user.id);
+    return { ok: true, id: fork.id };
+  } catch (err) {
+    console.error("forkStyleAsMine failed:", err);
+    return { ok: false, error: "No se pudo forkear el estilo." };
+  }
+}
+
+export async function deleteMyStyle(styleId: string): Promise<StyleActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "No autenticado." };
+  await deleteStyle(styleId, user.id); // deleteStyle ya filtra por dueño
+  return { ok: true };
+}
+
+export async function reportStyle(styleId: string, reason: string): Promise<StyleActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Inicia sesión para reportar." };
+  try {
+    await db.insert(resumeStyleReport).values({ styleId, userId: user.id, reason: reason || null });
+    return { ok: true };
+  } catch (err) {
+    console.error("reportStyle failed:", err);
+    return { ok: false, error: "No se pudo enviar el reporte." };
+  }
+}
+
+export async function createMyStyle(data: {
+  name: string;
+  description?: string;
+  category?: StyleCategory;
+  isPublic?: boolean;
+  tags?: string[];
+  config?: Partial<ResumeStyleConfig>;
+}): Promise<StyleActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "No autenticado." };
+  if (!data.name.trim()) return { ok: false, error: "Falta el nombre del estilo." };
+  try {
+    const style = await createStyle({ userId: user.id, slug: slugify(data.name), ...data });
+    return { ok: true, id: style.id };
+  } catch (err) {
+    console.error("createMyStyle failed:", err);
+    return { ok: false, error: "No se pudo guardar el estilo." };
+  }
+}
+
+/** Crea un estilo editable en la BD a partir de una plantilla en código. */
+export async function createStyleFromTemplate(templateId: string): Promise<StyleActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Inicia sesión para usar esta plantilla." };
+  const tpl = getTemplateById(templateId);
+  if (!tpl) return { ok: false, error: "Plantilla no encontrada." };
+  try {
+    const style = await createStyle({
+      userId: user.id,
+      name: tpl.name,
+      description: tpl.description,
+      category: tpl.category,
+      config: tpl.config,
+      slug: slugify(tpl.name),
+      isPublic: false,
+    });
+    return { ok: true, id: style.id };
+  } catch (err) {
+    console.error("createStyleFromTemplate failed:", err);
+    return { ok: false, error: "No se pudo crear el estilo." };
+  }
+}
+
+/** Todo lo que la galería necesita: comunidad (públicos) + estilos del usuario. */
+export async function getStylesGalleryData(): Promise<{
+  community: Awaited<ReturnType<typeof getPublicStyles>>;
+  mine: Awaited<ReturnType<typeof getUserStyles>>;
+  saved: Awaited<ReturnType<typeof getSavedStyles>>;
+  likedIds: string[];
+  savedIds: string[];
+}> {
+  try {
+    const [community, overview] = await Promise.all([
+      getPublicStyles({ limit: 60 }),
+      getMyStylesOverview(),
+    ]);
+    return { community, ...overview };
+  } catch (err) {
+    console.error("getStylesGalleryData failed:", err);
+    return { community: [], mine: [], saved: [], likedIds: [], savedIds: [] };
+  }
+}
+
+/** Datos de estilos del usuario para la galería (mis estilos, guardados, ids con like/guardado). */
+export async function getMyStylesOverview(): Promise<{
+  mine: Awaited<ReturnType<typeof getUserStyles>>;
+  saved: Awaited<ReturnType<typeof getSavedStyles>>;
+  likedIds: string[];
+  savedIds: string[];
+}> {
+  const empty = { mine: [], saved: [], likedIds: [], savedIds: [] };
+  const user = await getSessionUser();
+  if (!user) return empty;
+  try {
+    const [mine, saved, likes, saves] = await Promise.all([
+      getUserStyles(user.id),
+      getSavedStyles(user.id),
+      db.select({ id: resumeStyleLike.styleId }).from(resumeStyleLike).where(eq(resumeStyleLike.userId, user.id)),
+      db.select({ id: resumeStyleSaved.styleId }).from(resumeStyleSaved).where(eq(resumeStyleSaved.userId, user.id)),
+    ]);
+    return { mine, saved, likedIds: likes.map((l) => l.id), savedIds: saves.map((s) => s.id) };
+  } catch (err) {
+    console.error("getMyStylesOverview failed:", err);
+    return empty;
+  }
 }

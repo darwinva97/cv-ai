@@ -48,6 +48,8 @@ import type {
   StyleExtras,
 } from "@/db/schema/style";
 import { defaultStyleConfig } from "@/db/schema/style";
+import { toast } from "sonner";
+import { createMyStyle } from "@/actions/style";
 
 // Presets de colores
 const colorPresets = [
@@ -173,9 +175,21 @@ export default function NewStylePage() {
 
     setIsSaving(true);
     try {
-      // TODO: Llamar a la API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      router.push("/styles");
+      const res = await createMyStyle({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        category: category as
+          | "minimal" | "modern" | "classic" | "creative" | "professional" | "tech" | "academic" | "other",
+        isPublic,
+        tags,
+        config,
+      });
+      if (!res.ok || !res.id) {
+        toast.error(res.error || "No se pudo guardar el estilo");
+        return;
+      }
+      toast.success("Estilo guardado");
+      router.push(`/styles/${res.id}`);
     } finally {
       setIsSaving(false);
     }

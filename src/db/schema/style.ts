@@ -182,6 +182,19 @@ export const resumeStyleSaved = pgTable(
   (table) => [primaryKey({ columns: [table.userId, table.styleId] })]
 );
 
+// Reportes de estilos (moderación de comunidad). Activar con `pnpm db:push`.
+export const resumeStyleReport = pgTable("resume_style_report", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  styleId: uuid("style_id")
+    .notNull()
+    .references(() => resumeStyle.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Custom ltree type for referencing resume versions
 const ltreeType = customType<{ data: string }>({
   dataType() {
