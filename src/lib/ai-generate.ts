@@ -113,13 +113,33 @@ export interface GenerateInput {
    * e.g. ["summary"]). Pinned values are preserved server-side after generation.
    */
   pinnedBasics?: string[];
+  /**
+   * Qué tan agresivamente optimizar para la oferta, 1-10.
+   * 1-3 = conservador (no inventa nada, solo reescribe/reordena);
+   * 4-7 = equilibrado (no inventa empleadores/títulos/fechas, pero refuerza y
+   *        añade skills/keywords plausibles alineados a la oferta);
+   * 8-10 = agresivo (puede embellecer y extrapolar experiencia plausible).
+   * Por defecto conservador.
+   */
+  creativity?: number;
+}
+
+/** Instrucción de creatividad según el nivel 1-10 (default conservador). */
+function creativityGuidance(level?: number): string {
+  const n = Math.min(10, Math.max(1, Math.round(level ?? 1)));
+  if (n <= 3) {
+    return `Creativity level ${n}/10 (conservative): Do NOT invent anything. Keep every employer, job title, degree and date exactly as provided. Only rephrase, reorder and sharpen wording for clarity and impact.`;
+  }
+  if (n <= 7) {
+    return `Creativity level ${n}/10 (balanced): Stay truthful — never invent employers, degrees or dates. You MAY add plausible, relevant skills/keywords, emphasize achievements that match the target offer, and rephrase responsibilities using the offer's language to make the profile more attractive.`;
+  }
+  return `Creativity level ${n}/10 (aggressive): Optimize strongly for the target offer. You MAY embellish and extrapolate plausible experience, responsibilities and skills that fit the role, and adjust emphasis heavily. Avoid impossible claims (e.g. contradictory or future dates), but you may go beyond the literal source to maximize fit. The user has explicitly opted into this.`;
 }
 
 const SYSTEM_PROMPT = `You are an expert resume writer and career coach.
-You rewrite and optimize resumes so they are tailored to a specific job offer
-while staying strictly truthful — never invent employers, degrees, or dates
-that are not present in the candidate's current data. You may rephrase, reorder,
-quantify and sharpen wording. Keep dates exactly as provided unless empty.
+You rewrite and optimize resumes to fit a specific job offer. How truthful vs.
+embellished to be is governed strictly by the creativity guidance provided
+below — follow it. You may rephrase, reorder, quantify and sharpen wording.
 Write in the same language as the candidate's current content (default Spanish
 if ambiguous). Return only the structured object.`;
 
@@ -143,6 +163,7 @@ function buildUserPrompt(input: GenerateInput): string {
 
 const extractedBasicsSchema = z.object({
   name: z.string().describe("Full name, empty string if not found"),
+  label: z.string().describe("Professional title / role, e.g. 'Desarrollador Full Stack'"),
   email: z.string(),
   phone: z.string(),
   location: z.string().describe("City, country"),
@@ -251,7 +272,7 @@ export async function generateResumeContent(
   const { object, usage } = await generateObject({
     model,
     schema: generatedResumeSchema,
-    system: SYSTEM_PROMPT,
+    system: `${SYSTEM_PROMPT}\n\n${creativityGuidance(input.creativity)}`,
     prompt: buildUserPrompt(input),
   });
 

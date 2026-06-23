@@ -13,6 +13,7 @@ export async function proxy(request: NextRequest) {
   const publicRoutes = [
     "/",
     "/login",
+    "/probar",
     "/resume-result",
     "/privacy",
     "/terms",

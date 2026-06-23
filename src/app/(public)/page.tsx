@@ -119,8 +119,8 @@ export default function HomePage() {
           </p>
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button size="lg" asChild>
-              <Link href="/login">
-                Empezar gratis
+              <Link href="/probar">
+                Probar gratis (sin registro)
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
@@ -128,6 +128,9 @@ export default function HomePage() {
               <Link href="#como-funciona">Ver cómo funciona</Link>
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Sube tu CV (PDF o imagen), elige el diseño y optimízalo para una oferta — sin crear cuenta.
+          </p>
         </div>
       </section>
 
