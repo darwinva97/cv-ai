@@ -1,9 +1,11 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
+import { cookies, headers } from "next/headers";
+import { createHash } from "crypto";
+import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { db } from "@/db";
 import { systemAiKey } from "@/db/schema/system-key";
+import { anonGeneration } from "@/db/schema/anon";
 import { runWithSystemKey } from "@/lib/system-keys";
 import {
   extractResumeFromFile,
@@ -16,6 +18,7 @@ import type { Basics, Work, Education, Skill } from "@/types/resume";
 
 const FREE_COOKIE = "cv_free_uses";
 const BROWSER_DAILY_LIMIT = 3; // generaciones por navegador/día (cookie)
+const IP_DAILY_LIMIT = 10; // backstop por IP/día (requiere tabla anon_generation)
 
 const ALLOWED_TYPES = new Set([
   "image/png",
@@ -62,6 +65,13 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+async function ipHashFromHeaders(): Promise<string> {
+  const h = await headers();
+  const xff = h.get("x-forwarded-for");
+  const ip = (xff?.split(",")[0] || h.get("x-real-ip") || "unknown").trim();
+  return createHash("sha256").update(ip).digest("hex");
+}
+
 export async function generateFreeResume(input: {
   base64?: string;
   mediaType?: string;
@@ -95,6 +105,26 @@ export async function generateFreeResume(input: {
       error:
         "Alcanzaste el límite de pruebas gratis de hoy. Regístrate para seguir generando y guardar tu CV.",
     };
+  }
+
+  // ---- Backstop por IP (DB). Fail-open: si la tabla no existe aún, solo aplica
+  // el límite por cookie (activa la tabla con `pnpm db:push`). ----
+  const ipHash = await ipHashFromHeaders();
+  try {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recent = await db
+      .select({ id: anonGeneration.id })
+      .from(anonGeneration)
+      .where(and(eq(anonGeneration.ipHash, ipHash), gte(anonGeneration.createdAt, since)));
+    if (recent.length >= IP_DAILY_LIMIT) {
+      return {
+        ok: false,
+        code: "rate_limited",
+        error: "Demasiadas pruebas desde tu red hoy. Inténtalo más tarde o regístrate.",
+      };
+    }
+  } catch {
+    // Tabla anon_generation no disponible: se omite el backstop por IP.
   }
 
   const target = await getDefaultSystemTarget();
@@ -204,13 +234,18 @@ export async function generateFreeResume(input: {
       ? getPreset(input.styleId)
       : autoPickPreset({ label: basics.label, jobOffer });
 
-    // 5) Registrar uso (cookie) — solo tras éxito.
+    // 5) Registrar uso (cookie + IP) — solo tras éxito.
     jar.set(FREE_COOKIE, `${today()}:${usedToday + 1}`, {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24,
     });
+    try {
+      await db.insert(anonGeneration).values({ ipHash });
+    } catch {
+      // Tabla anon_generation no disponible: solo cuenta la cookie.
+    }
 
     return {
       ok: true,
